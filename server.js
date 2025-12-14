@@ -44,23 +44,17 @@ app.get("/api/kurlar", async (req, res) => {
 
     const result = await pool.request().query(`
       SELECT TOP (50)
-        Code, Buy, Sell, UpdatedAt
+        Kodu, Adi, Alis, Satis
       FROM dbo.OnlineFiyatlar
       ORDER BY Kodu DESC
-      FOR JSON PATH, ROOT('kurlar')
     `);
 
-    // FOR JSON çıktısı tek satır NVARCHAR olarak gelir (kolon adı boş olabilir)
-    const row = result.recordset?.[0];
-    const firstKey = row ? Object.keys(row)[0] : null;
-    const jsonText = firstKey ? row[firstKey] : "[]";
-
-    res.type("application/json").send(jsonText);
+    // JSON'u Node üretir
+    res.json({ kurlar: result.recordset });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
 });
-
 app.listen(PORT, () => {
   console.log(`Server listening on ${PORT}`);
 });
