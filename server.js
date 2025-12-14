@@ -449,17 +449,18 @@ function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false
       if (!kodu) continue;
 
       const existingItem = existingData[kodu] || {};
-      // EskisehirDöviz için boş değerleri sıfır olarak ayarla
+      // Tüm kaynaklar için boş veya 0 değerleri "0" olarak ayarla
       let newAlis = String(newItem.Alis || "");
       let newSatis = String(newItem.Satis || "");
-      if (isEskisehirDoviz) {
-        if (newAlis === "" || newAlis === "null" || newAlis === "undefined") {
-          newAlis = "0";
-        }
-        if (newSatis === "" || newSatis === "null" || newSatis === "undefined") {
-          newSatis = "0";
-        }
+      
+      // Boş, null, undefined veya "0" ise "0" olarak ayarla
+      if (newAlis === "" || newAlis === "null" || newAlis === "undefined" || newAlis === "0" || newAlis === 0 || !newAlis) {
+        newAlis = "0";
       }
+      if (newSatis === "" || newSatis === "null" || newSatis === "undefined" || newSatis === "0" || newSatis === 0 || !newSatis) {
+        newSatis = "0";
+      }
+      
       const oldAlis = String(existingItem.Alis || "");
       const oldSatis = String(existingItem.Satis || "");
 
