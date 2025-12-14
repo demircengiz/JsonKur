@@ -45,8 +45,8 @@ app.get("/api/kurlar", async (req, res) => {
     const result = await pool.request().query(`
       SELECT TOP (50)
         Code, Buy, Sell, UpdatedAt
-      FROM dbo.Kurlar
-      ORDER BY UpdatedAt DESC
+      FROM dbo.OnlineFiyatlar
+      ORDER BY Kodu DESC
       FOR JSON PATH, ROOT('kurlar')
     `);
 
