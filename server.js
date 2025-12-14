@@ -87,18 +87,18 @@ app.get("/api/kurlar", async (req, res) => {
       `);
 
       // Başarılı olursa SQL'den döndür
-      return res.json({ EskisehirDöviz: result.recordset, source: "database" });
+      return res.json({ EskisehirDöviz: result.recordset });
     } catch (dbError) {
       // SQL bağlantısı başarısız olursa JSON dosyasından oku
       console.warn("SQL bağlantısı başarısız, JSON dosyası kullanılıyor:", dbError.message);
       const kurlar = readKurlarFromFile();
-      return res.json({ EskisehirDöviz: kurlar, source: "json-file", warning: "Veritabanı bağlantısı yok, JSON dosyası kullanılıyor" });
+      return res.json({ EskisehirDöviz: kurlar, warning: "Veritabanı bağlantısı yok, JSON dosyası kullanılıyor" });
     }
   } catch (err) {
     // Son çare olarak boş array döndür
     console.error("Hata:", err.message);
     const kurlar = readKurlarFromFile();
-    res.json({ EskisehirDöviz: kurlar, source: "json-file", error: "Beklenmeyen hata oluştu" });
+    res.json({ EskisehirDöviz: kurlar, error: "Beklenmeyen hata oluştu" });
   }
 });
 app.listen(PORT, () => {
