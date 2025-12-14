@@ -256,7 +256,7 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
 // Köprübaşı API'den veri çek
 async function fetchKoprubasiData() {
   try {
-    const response = await fetch("http://88.247.58.95:85/Kur/koprubasi.json");
+    const response = await fetch("http://94.54.145.159:81/koprubasi.json");
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -351,13 +351,6 @@ async function fetchTcmbData() {
       return {};
     }
     
-    // Debug: Parse edilen yapıyı logla (sadece ilk seviye)
-    if (jsonData.Tarih_Date) {
-      console.log("TCMB XML başarıyla parse edildi");
-    } else {
-      console.warn("TCMB parse edilen veri yapısı:", Object.keys(jsonData));
-    }
-    
     return jsonData || {};
   } catch (err) {
     console.error("TCMB API'den veri alınamadı:", err.message);
@@ -392,8 +385,6 @@ function convertTcmbDataToKurFormat(tcmbData) {
       ? tarihDate.Currency 
       : [tarihDate.Currency];
     
-    console.log(`TCMB: ${currencies.length} adet Currency kaydı bulundu`);
-    
     for (const currency of currencies) {
       if (!currency) continue;
       
@@ -426,8 +417,6 @@ function convertTcmbDataToKurFormat(tcmbData) {
         Satis: String(satis)
       });
     }
-    
-    console.log(`TCMB: ${converted.length} adet döviz kuru dönüştürüldü`);
   } catch (err) {
     console.error("TCMB verisi dönüştürülürken hata:", err.message);
     console.error("Hata detayı:", err.stack);
@@ -600,7 +589,6 @@ app.get("/api/kurlar", async (req, res) => {
         
         // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
         if (convertedTcmbData && convertedTcmbData.length > 0) {
-          console.log(`TCMB: ${convertedTcmbData.length} adet döviz kuru işlendi`);
           updatedTcmbData = updateKurlarWithChanges(convertedTcmbData, existingTcmbData);
         } else {
           // API'den veri gelmedi, mevcut veriyi koru
