@@ -188,8 +188,8 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
       EskisehirDöviz: eskisehirData 
     };
     
-    // KoprubasiDoviz verisi varsa ekle
-    if (koprubasiData) {
+    // KoprubasiDoviz verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru
+    if (koprubasiData && Object.keys(koprubasiData).length > 0) {
       jsonData.KoprubasiDoviz = koprubasiData;
     } else {
       // Mevcut KoprubasiDoviz verisini koru
@@ -199,8 +199,8 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
       }
     }
     
-    // HaremAltinDoviz verisi varsa ekle
-    if (haremAltinData) {
+    // HaremAltinDoviz verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru
+    if (haremAltinData && Object.keys(haremAltinData).length > 0) {
       jsonData.HaremAltinDoviz = haremAltinData;
     } else {
       // Mevcut HaremAltinDoviz verisini koru
@@ -402,10 +402,18 @@ app.get("/api/kurlar", async (req, res) => {
       const koprubasiData = await fetchKoprubasiData();
       const convertedKoprubasiData = convertKoprubasiDataToKurFormat(koprubasiData);
       
-      // Yeni verilerle karşılaştırıp güncelle
-      updatedKoprubasiData = updateKurlarWithChanges(convertedKoprubasiData, existingKoprubasiData);
+      // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
+      if (convertedKoprubasiData && convertedKoprubasiData.length > 0) {
+        updatedKoprubasiData = updateKurlarWithChanges(convertedKoprubasiData, existingKoprubasiData);
+      } else {
+        // API'den veri gelmedi, mevcut veriyi koru
+        updatedKoprubasiData = existingKoprubasiData;
+        console.warn("Köprübaşı API'den veri gelmedi, mevcut veriler korunuyor");
+      }
     } catch (koprubasiError) {
-      console.warn("Köprübaşı API'den veri alınamadı:", koprubasiError.message);
+      // Hata durumunda mevcut veriyi koru
+      updatedKoprubasiData = existingKoprubasiData;
+      console.warn("Köprübaşı API'den veri alınamadı, mevcut veriler korunuyor:", koprubasiError.message);
     }
 
     // HaremAltin API'den veri çek
@@ -413,10 +421,18 @@ app.get("/api/kurlar", async (req, res) => {
       const haremAltinData = await fetchHaremAltinData();
       const convertedHaremAltinData = convertHaremAltinDataToKurFormat(haremAltinData);
       
-      // Yeni verilerle karşılaştırıp güncelle
-      updatedHaremAltinData = updateKurlarWithChanges(convertedHaremAltinData, existingHaremAltinData);
+      // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
+      if (convertedHaremAltinData && convertedHaremAltinData.length > 0) {
+        updatedHaremAltinData = updateKurlarWithChanges(convertedHaremAltinData, existingHaremAltinData);
+      } else {
+        // API'den veri gelmedi, mevcut veriyi koru
+        updatedHaremAltinData = existingHaremAltinData;
+        console.warn("HaremAltin API'den veri gelmedi, mevcut veriler korunuyor");
+      }
     } catch (haremAltinError) {
-      console.warn("HaremAltin API'den veri alınamadı:", haremAltinError.message);
+      // Hata durumunda mevcut veriyi koru
+      updatedHaremAltinData = existingHaremAltinData;
+      console.warn("HaremAltin API'den veri alınamadı, mevcut veriler korunuyor:", haremAltinError.message);
     }
 
     // Güncellenmiş verileri JSON dosyasına kaydet
