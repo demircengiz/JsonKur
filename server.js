@@ -157,13 +157,47 @@ function readHaremAltinFromFile() {
   }
 }
 
+// KoprubasiDoviz verilerini JSON dosyasından okuma
+function readKoprubasiFromFile() {
+  try {
+    const jsonPath = path.join(__dirname, "kurlar.json");
+    if (fs.existsSync(jsonPath)) {
+      const data = fs.readFileSync(jsonPath, "utf8");
+      const parsed = JSON.parse(data);
+      const koprubasi = parsed.KoprubasiDoviz || {};
+      
+      // Her bir öğeyi doğru sırada yeniden oluştur
+      const reordered = {};
+      for (const [key, value] of Object.entries(koprubasi)) {
+        reordered[key] = reorderKurItem(value);
+      }
+      return reordered;
+    }
+    return {};
+  } catch (err) {
+    console.warn("JSON dosyası okunamadı:", err.message);
+    return {};
+  }
+}
+
 // JSON dosyasına veri yazma fonksiyonu
-function writeKurlarToFile(eskisehirData, haremAltinData = null) {
+function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData = null) {
   try {
     const jsonPath = path.join(__dirname, "kurlar.json");
     const jsonData = { 
       EskisehirDöviz: eskisehirData 
     };
+    
+    // KoprubasiDoviz verisi varsa ekle
+    if (koprubasiData) {
+      jsonData.KoprubasiDoviz = koprubasiData;
+    } else {
+      // Mevcut KoprubasiDoviz verisini koru
+      const existing = readKoprubasiFromFile();
+      if (Object.keys(existing).length > 0) {
+        jsonData.KoprubasiDoviz = existing;
+      }
+    }
     
     // HaremAltinDoviz verisi varsa ekle
     if (haremAltinData) {
@@ -182,6 +216,41 @@ function writeKurlarToFile(eskisehirData, haremAltinData = null) {
     console.error("JSON dosyası yazılamadı:", err.message);
     return false;
   }
+}
+
+// Köprübaşı API'den veri çek
+async function fetchKoprubasiData() {
+  try {
+    const response = await fetch("http://94.54.145.159:81/koprubasi.json");
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    return data || [];
+  } catch (err) {
+    console.warn("Köprübaşı API'den veri alınamadı:", err.message);
+    return [];
+  }
+}
+
+// Köprübaşı API verilerini mevcut formata dönüştür
+function convertKoprubasiDataToKurFormat(koprubasiData) {
+  const converted = [];
+  
+  if (Array.isArray(koprubasiData)) {
+    for (const item of koprubasiData) {
+      if (item && item.KOD) {
+        converted.push({
+          Kodu: String(item.KOD || ""),
+          Adi: String(item.AD || item.KOD || ""),
+          Alis: String(item.ALIS || ""),
+          Satis: String(item.SATIS || "")
+        });
+      }
+    }
+  }
+  
+  return converted;
 }
 
 // Harici API'den altın/döviz verilerini çek
@@ -303,8 +372,10 @@ app.get("/api/kurlar", async (req, res) => {
   try {
     // Mevcut JSON dosyasını oku
     let existingEskisehirData = readKurlarFromFile();
+    let existingKoprubasiData = readKoprubasiFromFile();
     let existingHaremAltinData = readHaremAltinFromFile();
     let updatedEskisehirData = existingEskisehirData;
+    let updatedKoprubasiData = existingKoprubasiData;
     let updatedHaremAltinData = existingHaremAltinData;
 
     // SQL Server'dan veri almaya çalış
@@ -326,22 +397,40 @@ app.get("/api/kurlar", async (req, res) => {
       console.warn("SQL bağlantısı başarısız:", dbError.message);
     }
 
-    // Harici API'den veri çek
+    // Köprübaşı API'den veri çek
     try {
-      const haremAltinData = await fetchHaremAltinData();
-      const convertedData = convertHaremAltinDataToKurFormat(haremAltinData);
+      const koprubasiData = await fetchKoprubasiData();
+      const convertedKoprubasiData = convertKoprubasiDataToKurFormat(koprubasiData);
       
       // Yeni verilerle karşılaştırıp güncelle
-      updatedHaremAltinData = updateKurlarWithChanges(convertedData, existingHaremAltinData);
-    } catch (apiError) {
-      console.warn("Harici API'den veri alınamadı:", apiError.message);
+      updatedKoprubasiData = updateKurlarWithChanges(convertedKoprubasiData, existingKoprubasiData);
+    } catch (koprubasiError) {
+      console.warn("Köprübaşı API'den veri alınamadı:", koprubasiError.message);
+    }
+
+    // HaremAltin API'den veri çek
+    try {
+      const haremAltinData = await fetchHaremAltinData();
+      const convertedHaremAltinData = convertHaremAltinDataToKurFormat(haremAltinData);
+      
+      // Yeni verilerle karşılaştırıp güncelle
+      updatedHaremAltinData = updateKurlarWithChanges(convertedHaremAltinData, existingHaremAltinData);
+    } catch (haremAltinError) {
+      console.warn("HaremAltin API'den veri alınamadı:", haremAltinError.message);
     }
 
     // Güncellenmiş verileri JSON dosyasına kaydet
-    writeKurlarToFile(updatedEskisehirData, updatedHaremAltinData);
+    writeKurlarToFile(updatedEskisehirData, updatedKoprubasiData, updatedHaremAltinData);
 
-    // Response oluştur
-    const response = { EskisehirDöviz: updatedEskisehirData };
+    // Response oluştur (doğru sırada: EskisehirDöviz, KoprubasiDoviz, HaremAltinDoviz)
+    const response = { 
+      EskisehirDöviz: updatedEskisehirData 
+    };
+    
+    // KoprubasiDoviz verisi varsa ekle
+    if (Object.keys(updatedKoprubasiData).length > 0) {
+      response.KoprubasiDoviz = updatedKoprubasiData;
+    }
     
     // HaremAltinDoviz verisi varsa ekle
     if (Object.keys(updatedHaremAltinData).length > 0) {
@@ -353,9 +442,13 @@ app.get("/api/kurlar", async (req, res) => {
     // Son çare olarak JSON dosyasından oku
     console.error("Hata:", err.message);
     const kurlar = readKurlarFromFile();
+    const koprubasi = readKoprubasiFromFile();
     const haremAltin = readHaremAltinFromFile();
     
     const response = { EskisehirDöviz: kurlar };
+    if (Object.keys(koprubasi).length > 0) {
+      response.KoprubasiDoviz = koprubasi;
+    }
     if (Object.keys(haremAltin).length > 0) {
       response.HaremAltinDoviz = haremAltin;
     }
