@@ -330,17 +330,30 @@ async function fetchTcmbData() {
     }
     const xmlText = await response.text();
     
+    if (!xmlText || xmlText.trim().length === 0) {
+      throw new Error("TCMB API'den boş yanıt alındı");
+    }
+    
     // XML'i parse et
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: "@_",
-      textNodeName: "#text"
+      textNodeName: "#text",
+      parseAttributeValue: true,
+      trimValues: true
     });
     
     const jsonData = parser.parse(xmlText);
+    
+    if (!jsonData || Object.keys(jsonData).length === 0) {
+      console.warn("TCMB XML parse edildi ancak veri bulunamadı");
+      return {};
+    }
+    
     return jsonData || {};
   } catch (err) {
-    console.warn("TCMB API'den veri alınamadı:", err.message);
+    console.error("TCMB API'den veri alınamadı:", err.message);
+    console.error("Hata detayı:", err.stack);
     return {};
   }
 }
@@ -350,9 +363,20 @@ function convertTcmbDataToKurFormat(tcmbData) {
   const converted = [];
   
   try {
+    if (!tcmbData || Object.keys(tcmbData).length === 0) {
+      console.warn("TCMB verisi boş");
+      return converted;
+    }
+    
     // TCMB XML yapısı: Tarih_Date.Currency[]
     const tarihDate = tcmbData.Tarih_Date;
-    if (!tarihDate || !tarihDate.Currency) {
+    if (!tarihDate) {
+      console.warn("TCMB verisinde Tarih_Date bulunamadı. Veri yapısı:", Object.keys(tcmbData));
+      return converted;
+    }
+    
+    if (!tarihDate.Currency) {
+      console.warn("TCMB verisinde Currency bulunamadı. Tarih_Date yapısı:", Object.keys(tarihDate));
       return converted;
     }
     
@@ -362,16 +386,28 @@ function convertTcmbDataToKurFormat(tcmbData) {
     
     for (const currency of currencies) {
       if (currency && currency.CurrencyCode) {
+        // BanknoteBuying ve BanknoteSelling boş olabilir, o durumda boş string kullan
+        const alis = currency.BanknoteBuying || "";
+        const satis = currency.BanknoteSelling || "";
+        
+        // Eğer hem alis hem satis boşsa bu kaydı atla
+        if (alis === "" && satis === "") {
+          continue;
+        }
+        
         converted.push({
           Kodu: String(currency.CurrencyCode || ""),
           Adi: String(currency.CurrencyName || currency.CurrencyCode || ""),
-          Alis: String(currency.BanknoteBuying || ""),
-          Satis: String(currency.BanknoteSelling || "")
+          Alis: String(alis),
+          Satis: String(satis)
         });
       }
     }
+    
+    console.log(`TCMB: ${converted.length} adet döviz kuru dönüştürüldü`);
   } catch (err) {
-    console.warn("TCMB verisi dönüştürülürken hata:", err.message);
+    console.error("TCMB verisi dönüştürülürken hata:", err.message);
+    console.error("Hata detayı:", err.stack);
   }
   
   return converted;
@@ -531,20 +567,28 @@ app.get("/api/kurlar", async (req, res) => {
     // TCMB API'den veri çek
     try {
       const tcmbData = await fetchTcmbData();
-      const convertedTcmbData = convertTcmbDataToKurFormat(tcmbData);
       
-      // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
-      if (convertedTcmbData && convertedTcmbData.length > 0) {
-        updatedTcmbData = updateKurlarWithChanges(convertedTcmbData, existingTcmbData);
-      } else {
-        // API'den veri gelmedi, mevcut veriyi koru
+      if (!tcmbData || Object.keys(tcmbData).length === 0) {
+        console.warn("TCMB API'den boş veri döndü, mevcut veriler korunuyor");
         updatedTcmbData = existingTcmbData;
-        console.warn("TCMB API'den veri gelmedi, mevcut veriler korunuyor");
+      } else {
+        const convertedTcmbData = convertTcmbDataToKurFormat(tcmbData);
+        
+        // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
+        if (convertedTcmbData && convertedTcmbData.length > 0) {
+          console.log(`TCMB: ${convertedTcmbData.length} adet döviz kuru işlendi`);
+          updatedTcmbData = updateKurlarWithChanges(convertedTcmbData, existingTcmbData);
+        } else {
+          // API'den veri gelmedi, mevcut veriyi koru
+          updatedTcmbData = existingTcmbData;
+          console.warn("TCMB API'den veri gelmedi veya dönüştürülemedi, mevcut veriler korunuyor");
+        }
       }
     } catch (tcmbError) {
       // Hata durumunda mevcut veriyi koru
       updatedTcmbData = existingTcmbData;
-      console.warn("TCMB API'den veri alınamadı, mevcut veriler korunuyor:", tcmbError.message);
+      console.error("TCMB API'den veri alınamadı, mevcut veriler korunuyor:", tcmbError.message);
+      console.error("Hata detayı:", tcmbError.stack);
     }
 
     // Güncellenmiş verileri JSON dosyasına kaydet
