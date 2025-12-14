@@ -53,15 +53,31 @@ async function getPool() {
   return poolPromise;
 }
 
-// Şimdiki zamanı formatla (DD.MM.YYYY HH:mm:ss)
+// Şimdiki zamanı formatla (DD.MM.YYYY HH:mm:ss) - Türkiye saati
 function getCurrentDateTime() {
+  // Türkiye saatine göre tarih/saat al (Europe/Istanbul - UTC+3)
   const now = new Date();
-  const day = String(now.getDate()).padStart(2, "0");
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const year = now.getFullYear();
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const seconds = String(now.getSeconds()).padStart(2, "0");
+  
+  // Türkiye saatini almak için Intl.DateTimeFormat kullan
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(now);
+  const year = parts.find(p => p.type === "year").value;
+  const month = parts.find(p => p.type === "month").value;
+  const day = parts.find(p => p.type === "day").value;
+  const hours = parts.find(p => p.type === "hour").value;
+  const minutes = parts.find(p => p.type === "minute").value;
+  const seconds = parts.find(p => p.type === "second").value;
+  
   return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
 }
 
@@ -466,10 +482,10 @@ function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false
         oldSatis = "0";
       }
 
-      // Alis değişti mi?
-      if (newAlis !== oldAlis) {
-        // Eski değerleri e_Alis ve e_Alis_t'ye kaydet (eğer eski değer "0" değilse)
-        if (oldAlis !== "0" && oldAlis !== "") {
+      // Alis değişti mi veya yeni kayıt mı?
+      if (newAlis !== oldAlis || !existingItem.Alis) {
+        // Eski değerleri e_Alis ve e_Alis_t'ye kaydet (eğer eski değer "0" değilse ve varsa)
+        if (oldAlis !== "0" && oldAlis !== "" && existingItem.Alis) {
           existingItem.e_Alis = oldAlis;
           existingItem.e_Alis_t = existingItem.Alis_t || currentTime;
         }
@@ -478,10 +494,10 @@ function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false
         existingItem.Alis_t = currentTime;
       }
 
-      // Satis değişti mi?
-      if (newSatis !== oldSatis) {
-        // Eski değerleri e_Satis ve e_Satis_t'ye kaydet (eğer eski değer "0" değilse)
-        if (oldSatis !== "0" && oldSatis !== "") {
+      // Satis değişti mi veya yeni kayıt mı?
+      if (newSatis !== oldSatis || !existingItem.Satis) {
+        // Eski değerleri e_Satis ve e_Satis_t'ye kaydet (eğer eski değer "0" değilse ve varsa)
+        if (oldSatis !== "0" && oldSatis !== "" && existingItem.Satis) {
           existingItem.e_Satis = oldSatis;
           existingItem.e_Satis_t = existingItem.Satis_t || currentTime;
         }
