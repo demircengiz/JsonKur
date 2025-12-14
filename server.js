@@ -3,6 +3,7 @@ import sql from "mssql";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { XMLParser } from "fast-xml-parser";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -180,8 +181,31 @@ function readKoprubasiFromFile() {
   }
 }
 
+// Tcmb verilerini JSON dosyasından okuma
+function readTcmbFromFile() {
+  try {
+    const jsonPath = path.join(__dirname, "kurlar.json");
+    if (fs.existsSync(jsonPath)) {
+      const data = fs.readFileSync(jsonPath, "utf8");
+      const parsed = JSON.parse(data);
+      const tcmb = parsed.Tcmb || {};
+      
+      // Her bir öğeyi doğru sırada yeniden oluştur
+      const reordered = {};
+      for (const [key, value] of Object.entries(tcmb)) {
+        reordered[key] = reorderKurItem(value);
+      }
+      return reordered;
+    }
+    return {};
+  } catch (err) {
+    console.warn("JSON dosyası okunamadı:", err.message);
+    return {};
+  }
+}
+
 // JSON dosyasına veri yazma fonksiyonu
-function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData = null) {
+function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData = null, tcmbData = null) {
   try {
     const jsonPath = path.join(__dirname, "kurlar.json");
     const jsonData = { 
@@ -207,6 +231,17 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
       const existing = readHaremAltinFromFile();
       if (Object.keys(existing).length > 0) {
         jsonData.HaremAltinDoviz = existing;
+      }
+    }
+    
+    // Tcmb verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru
+    if (tcmbData && Object.keys(tcmbData).length > 0) {
+      jsonData.Tcmb = tcmbData;
+    } else {
+      // Mevcut Tcmb verisini koru
+      const existing = readTcmbFromFile();
+      if (Object.keys(existing).length > 0) {
+        jsonData.Tcmb = existing;
       }
     }
     
@@ -281,6 +316,62 @@ function convertHaremAltinDataToKurFormat(haremAltinData) {
         Satis: String(item.satis || "")
       });
     }
+  }
+  
+  return converted;
+}
+
+// TCMB API'den veri çek
+async function fetchTcmbData() {
+  try {
+    const response = await fetch("https://www.tcmb.gov.tr/kurlar/today.xml");
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const xmlText = await response.text();
+    
+    // XML'i parse et
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: "@_",
+      textNodeName: "#text"
+    });
+    
+    const jsonData = parser.parse(xmlText);
+    return jsonData || {};
+  } catch (err) {
+    console.warn("TCMB API'den veri alınamadı:", err.message);
+    return {};
+  }
+}
+
+// TCMB API verilerini mevcut formata dönüştür
+function convertTcmbDataToKurFormat(tcmbData) {
+  const converted = [];
+  
+  try {
+    // TCMB XML yapısı: Tarih_Date.Currency[]
+    const tarihDate = tcmbData.Tarih_Date;
+    if (!tarihDate || !tarihDate.Currency) {
+      return converted;
+    }
+    
+    const currencies = Array.isArray(tarihDate.Currency) 
+      ? tarihDate.Currency 
+      : [tarihDate.Currency];
+    
+    for (const currency of currencies) {
+      if (currency && currency.CurrencyCode) {
+        converted.push({
+          Kodu: String(currency.CurrencyCode || ""),
+          Adi: String(currency.CurrencyName || currency.CurrencyCode || ""),
+          Alis: String(currency.BanknoteBuying || ""),
+          Satis: String(currency.BanknoteSelling || "")
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("TCMB verisi dönüştürülürken hata:", err.message);
   }
   
   return converted;
@@ -374,9 +465,11 @@ app.get("/api/kurlar", async (req, res) => {
     let existingEskisehirData = readKurlarFromFile();
     let existingKoprubasiData = readKoprubasiFromFile();
     let existingHaremAltinData = readHaremAltinFromFile();
+    let existingTcmbData = readTcmbFromFile();
     let updatedEskisehirData = existingEskisehirData;
     let updatedKoprubasiData = existingKoprubasiData;
     let updatedHaremAltinData = existingHaremAltinData;
+    let updatedTcmbData = existingTcmbData;
 
     // SQL Server'dan veri almaya çalış
     try {
@@ -435,10 +528,29 @@ app.get("/api/kurlar", async (req, res) => {
       console.warn("HaremAltin API'den veri alınamadı, mevcut veriler korunuyor:", haremAltinError.message);
     }
 
-    // Güncellenmiş verileri JSON dosyasına kaydet
-    writeKurlarToFile(updatedEskisehirData, updatedKoprubasiData, updatedHaremAltinData);
+    // TCMB API'den veri çek
+    try {
+      const tcmbData = await fetchTcmbData();
+      const convertedTcmbData = convertTcmbDataToKurFormat(tcmbData);
+      
+      // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
+      if (convertedTcmbData && convertedTcmbData.length > 0) {
+        updatedTcmbData = updateKurlarWithChanges(convertedTcmbData, existingTcmbData);
+      } else {
+        // API'den veri gelmedi, mevcut veriyi koru
+        updatedTcmbData = existingTcmbData;
+        console.warn("TCMB API'den veri gelmedi, mevcut veriler korunuyor");
+      }
+    } catch (tcmbError) {
+      // Hata durumunda mevcut veriyi koru
+      updatedTcmbData = existingTcmbData;
+      console.warn("TCMB API'den veri alınamadı, mevcut veriler korunuyor:", tcmbError.message);
+    }
 
-    // Response oluştur (doğru sırada: EskisehirDöviz, KoprubasiDoviz, HaremAltinDoviz)
+    // Güncellenmiş verileri JSON dosyasına kaydet
+    writeKurlarToFile(updatedEskisehirData, updatedKoprubasiData, updatedHaremAltinData, updatedTcmbData);
+
+    // Response oluştur (doğru sırada: EskisehirDöviz, KoprubasiDoviz, HaremAltinDoviz, Tcmb)
     const response = { 
       EskisehirDöviz: updatedEskisehirData 
     };
@@ -452,6 +564,11 @@ app.get("/api/kurlar", async (req, res) => {
     if (Object.keys(updatedHaremAltinData).length > 0) {
       response.HaremAltinDoviz = updatedHaremAltinData;
     }
+    
+    // Tcmb verisi varsa ekle
+    if (Object.keys(updatedTcmbData).length > 0) {
+      response.Tcmb = updatedTcmbData;
+    }
 
     return res.json(response);
   } catch (err) {
@@ -460,6 +577,7 @@ app.get("/api/kurlar", async (req, res) => {
     const kurlar = readKurlarFromFile();
     const koprubasi = readKoprubasiFromFile();
     const haremAltin = readHaremAltinFromFile();
+    const tcmb = readTcmbFromFile();
     
     const response = { EskisehirDöviz: kurlar };
     if (Object.keys(koprubasi).length > 0) {
@@ -467,6 +585,9 @@ app.get("/api/kurlar", async (req, res) => {
     }
     if (Object.keys(haremAltin).length > 0) {
       response.HaremAltinDoviz = haremAltin;
+    }
+    if (Object.keys(tcmb).length > 0) {
+      response.Tcmb = tcmb;
     }
     
     res.json({ ...response, error: "Beklenmeyen hata oluştu" });
