@@ -216,9 +216,20 @@ function readTcmbFromFile() {
 function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData = null, tcmbData = null) {
   try {
     const jsonPath = path.join(__dirname, "kurlar.json");
-    const jsonData = { 
-      EskisehirDöviz: eskisehirData 
-    };
+    const jsonData = {};
+    
+    // EskisehirDöviz verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru
+    if (eskisehirData && Object.keys(eskisehirData).length > 0) {
+      jsonData.EskisehirDöviz = eskisehirData;
+    } else {
+      // Mevcut EskisehirDöviz verisini koru
+      const existing = readKurlarFromFile();
+      if (Object.keys(existing).length > 0) {
+        jsonData.EskisehirDöviz = existing;
+      } else {
+        jsonData.EskisehirDöviz = {};
+      }
+    }
     
     // KoprubasiDoviz verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru
     if (koprubasiData && Object.keys(koprubasiData).length > 0) {
@@ -228,6 +239,8 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
       const existing = readKoprubasiFromFile();
       if (Object.keys(existing).length > 0) {
         jsonData.KoprubasiDoviz = existing;
+      } else {
+        jsonData.KoprubasiDoviz = {};
       }
     }
     
@@ -239,6 +252,8 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
       const existing = readHaremAltinFromFile();
       if (Object.keys(existing).length > 0) {
         jsonData.HaremAltinDoviz = existing;
+      } else {
+        jsonData.HaremAltinDoviz = {};
       }
     }
     
@@ -250,6 +265,8 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
       const existing = readTcmbFromFile();
       if (Object.keys(existing).length > 0) {
         jsonData.Tcmb = existing;
+      } else {
+        jsonData.Tcmb = {};
       }
     }
     
@@ -524,8 +541,14 @@ app.get("/api/kurlar", async (req, res) => {
     let updatedKoprubasiData = existingKoprubasiData;
     let updatedHaremAltinData = existingHaremAltinData;
     let updatedTcmbData = existingTcmbData;
+    
+    // Her kaynak için bağlantı başarılı olup olmadığını takip et
+    let eskisehirSuccess = false;
+    let koprubasiSuccess = false;
+    let haremAltinSuccess = false;
+    let tcmbSuccess = false;
 
-    // SQL Server'dan veri almaya çalış
+    // SQL Server'dan veri almaya çalış (EskisehirDöviz)
     try {
       const pool = await getPool();
       const result = await pool.request().query(`
@@ -540,8 +563,10 @@ app.get("/api/kurlar", async (req, res) => {
 
       // Yeni verilerle karşılaştırıp güncelle (EskisehirDöviz için boş değerleri sıfır yap)
       updatedEskisehirData = updateKurlarWithChanges(result.recordset, existingEskisehirData, true);
+      eskisehirSuccess = true;
     } catch (dbError) {
-      // SQL bağlantısı zaten getPool() içinde loglanıyor
+      // SQL bağlantısı başarısız, mevcut veriyi koru
+      updatedEskisehirData = existingEskisehirData;
     }
 
     // Köprübaşı API'den veri çek
@@ -549,9 +574,10 @@ app.get("/api/kurlar", async (req, res) => {
       const koprubasiData = await fetchKoprubasiData();
       const convertedKoprubasiData = convertKoprubasiDataToKurFormat(koprubasiData);
       
-      // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
+      // Veri varsa ve boş değilse güncelle
       if (convertedKoprubasiData && convertedKoprubasiData.length > 0) {
         updatedKoprubasiData = updateKurlarWithChanges(convertedKoprubasiData, existingKoprubasiData);
+        koprubasiSuccess = true;
       } else {
         // API'den veri gelmedi, mevcut veriyi koru
         updatedKoprubasiData = existingKoprubasiData;
@@ -566,9 +592,10 @@ app.get("/api/kurlar", async (req, res) => {
       const haremAltinData = await fetchHaremAltinData();
       const convertedHaremAltinData = convertHaremAltinDataToKurFormat(haremAltinData);
       
-      // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
+      // Veri varsa ve boş değilse güncelle
       if (convertedHaremAltinData && convertedHaremAltinData.length > 0) {
         updatedHaremAltinData = updateKurlarWithChanges(convertedHaremAltinData, existingHaremAltinData);
+        haremAltinSuccess = true;
       } else {
         // API'den veri gelmedi, mevcut veriyi koru
         updatedHaremAltinData = existingHaremAltinData;
@@ -582,26 +609,36 @@ app.get("/api/kurlar", async (req, res) => {
     try {
       const tcmbData = await fetchTcmbData();
       
-      if (!tcmbData || Object.keys(tcmbData).length === 0) {
-        updatedTcmbData = existingTcmbData;
-      } else {
+      if (tcmbData && Object.keys(tcmbData).length > 0) {
         const convertedTcmbData = convertTcmbDataToKurFormat(tcmbData);
         
-        // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
+        // Veri varsa ve boş değilse güncelle
         if (convertedTcmbData && convertedTcmbData.length > 0) {
           updatedTcmbData = updateKurlarWithChanges(convertedTcmbData, existingTcmbData);
+          tcmbSuccess = true;
         } else {
           // API'den veri gelmedi, mevcut veriyi koru
           updatedTcmbData = existingTcmbData;
         }
+      } else {
+        // API'den veri gelmedi, mevcut veriyi koru
+        updatedTcmbData = existingTcmbData;
       }
     } catch (tcmbError) {
       // Hata durumunda mevcut veriyi koru
       updatedTcmbData = existingTcmbData;
     }
 
-    // Güncellenmiş verileri JSON dosyasına kaydet
-    writeKurlarToFile(updatedEskisehirData, updatedKoprubasiData, updatedHaremAltinData, updatedTcmbData);
+    // En az bir kaynak başarılı olduysa JSON dosyasına kaydet
+    // Başarılı olanlar güncellenir, başarısız olanlar için mevcut veriler korunur (null geçilir)
+    if (eskisehirSuccess || koprubasiSuccess || haremAltinSuccess || tcmbSuccess) {
+      writeKurlarToFile(
+        eskisehirSuccess ? updatedEskisehirData : null,
+        koprubasiSuccess ? updatedKoprubasiData : null,
+        haremAltinSuccess ? updatedHaremAltinData : null,
+        tcmbSuccess ? updatedTcmbData : null
+      );
+    }
 
     // Response oluştur (doğru sırada: EskisehirDöviz, KoprubasiDoviz, HaremAltinDoviz, Tcmb)
     const response = { 
