@@ -103,17 +103,87 @@ function readKurlarFromFile() {
   }
 }
 
-// JSON dosyasına veri yazma fonksiyonu
-function writeKurlarToFile(data) {
+// HaremAltinDoviz verilerini JSON dosyasından okuma
+function readHaremAltinFromFile() {
   try {
     const jsonPath = path.join(__dirname, "kurlar.json");
-    const jsonData = { EskisehirDöviz: data };
+    if (fs.existsSync(jsonPath)) {
+      const data = fs.readFileSync(jsonPath, "utf8");
+      const parsed = JSON.parse(data);
+      const haremAltin = parsed.HaremAltinDoviz || {};
+      
+      // Her bir öğeyi doğru sırada yeniden oluştur
+      const reordered = {};
+      for (const [key, value] of Object.entries(haremAltin)) {
+        reordered[key] = reorderKurItem(value);
+      }
+      return reordered;
+    }
+    return {};
+  } catch (err) {
+    console.warn("JSON dosyası okunamadı:", err.message);
+    return {};
+  }
+}
+
+// JSON dosyasına veri yazma fonksiyonu
+function writeKurlarToFile(eskisehirData, haremAltinData = null) {
+  try {
+    const jsonPath = path.join(__dirname, "kurlar.json");
+    const jsonData = { 
+      EskisehirDöviz: eskisehirData 
+    };
+    
+    // HaremAltinDoviz verisi varsa ekle
+    if (haremAltinData) {
+      jsonData.HaremAltinDoviz = haremAltinData;
+    } else {
+      // Mevcut HaremAltinDoviz verisini koru
+      const existing = readHaremAltinFromFile();
+      if (Object.keys(existing).length > 0) {
+        jsonData.HaremAltinDoviz = existing;
+      }
+    }
+    
     fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 4), "utf8");
     return true;
   } catch (err) {
     console.error("JSON dosyası yazılamadı:", err.message);
     return false;
   }
+}
+
+// Harici API'den altın/döviz verilerini çek
+async function fetchHaremAltinData() {
+  try {
+    const response = await fetch("https://canlipiyasalar.haremaltin.com/tmp/altin.json?dil_kodu=tr");
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    return data.data || {};
+  } catch (err) {
+    console.warn("Harici API'den veri alınamadı:", err.message);
+    return {};
+  }
+}
+
+// Harici API verilerini mevcut formata dönüştür
+function convertHaremAltinDataToKurFormat(haremAltinData) {
+  const converted = [];
+  
+  for (const [key, item] of Object.entries(haremAltinData)) {
+    if (item && item.code) {
+      converted.push({
+        Kodu: item.code,
+        Adi: item.code, // code hem Kodu hem Adi olarak kullanılıyor
+        Alis: String(item.alis || ""),
+        Satis: String(item.satis || "")
+      });
+    }
+  }
+  
+  return converted;
 }
 
 // Yeni verileri mevcut JSON ile karşılaştırıp güncelle
@@ -186,7 +256,13 @@ app.get("/health", (req, res) => res.json({ ok: true }));
  */
 app.get("/api/kurlar", async (req, res) => {
   try {
-    // Önce SQL Server'dan veri almaya çalış
+    // Mevcut JSON dosyasını oku
+    let existingEskisehirData = readKurlarFromFile();
+    let existingHaremAltinData = readHaremAltinFromFile();
+    let updatedEskisehirData = existingEskisehirData;
+    let updatedHaremAltinData = existingHaremAltinData;
+
+    // SQL Server'dan veri almaya çalış
     try {
       const pool = await getPool();
       const result = await pool.request().query(`
@@ -196,28 +272,47 @@ app.get("/api/kurlar", async (req, res) => {
         ORDER BY Kodu DESC
       `);
 
-      // Mevcut JSON dosyasını oku
-      const existingData = readKurlarFromFile();
+      // Yeni verilerle karşılaştırıp güncelle
+      updatedEskisehirData = updateKurlarWithChanges(result.recordset, existingEskisehirData);
+    } catch (dbError) {
+      console.warn("SQL bağlantısı başarısız:", dbError.message);
+    }
+
+    // Harici API'den veri çek
+    try {
+      const haremAltinData = await fetchHaremAltinData();
+      const convertedData = convertHaremAltinDataToKurFormat(haremAltinData);
       
       // Yeni verilerle karşılaştırıp güncelle
-      const updatedData = updateKurlarWithChanges(result.recordset, existingData);
-      
-      // Güncellenmiş veriyi JSON dosyasına kaydet
-      writeKurlarToFile(updatedData);
-
-      // Güncellenmiş veriyi döndür
-      return res.json({ EskisehirDöviz: updatedData });
-    } catch (dbError) {
-      // SQL bağlantısı başarısız olursa JSON dosyasından oku
-      console.warn("SQL bağlantısı başarısız, JSON dosyası kullanılıyor:", dbError.message);
-      const kurlar = readKurlarFromFile();
-      return res.json({ EskisehirDöviz: kurlar, warning: "Veritabanı bağlantısı yok, JSON dosyası kullanılıyor" });
+      updatedHaremAltinData = updateKurlarWithChanges(convertedData, existingHaremAltinData);
+    } catch (apiError) {
+      console.warn("Harici API'den veri alınamadı:", apiError.message);
     }
+
+    // Güncellenmiş verileri JSON dosyasına kaydet
+    writeKurlarToFile(updatedEskisehirData, updatedHaremAltinData);
+
+    // Response oluştur
+    const response = { EskisehirDöviz: updatedEskisehirData };
+    
+    // HaremAltinDoviz verisi varsa ekle
+    if (Object.keys(updatedHaremAltinData).length > 0) {
+      response.HaremAltinDoviz = updatedHaremAltinData;
+    }
+
+    return res.json(response);
   } catch (err) {
-    // Son çare olarak boş array döndür
+    // Son çare olarak JSON dosyasından oku
     console.error("Hata:", err.message);
     const kurlar = readKurlarFromFile();
-    res.json({ EskisehirDöviz: kurlar, error: "Beklenmeyen hata oluştu" });
+    const haremAltin = readHaremAltinFromFile();
+    
+    const response = { EskisehirDöviz: kurlar };
+    if (Object.keys(haremAltin).length > 0) {
+      response.HaremAltinDoviz = haremAltin;
+    }
+    
+    res.json({ ...response, error: "Beklenmeyen hata oluştu" });
   }
 });
 app.listen(PORT, () => {
