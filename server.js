@@ -21,7 +21,9 @@ const dbConfig = {
   port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 1433,
   options: {
     encrypt: false,                // Azure SQL ise genelde true gerekir
-    trustServerCertificate: true   // self-signed / cert problemi varsa
+    trustServerCertificate: true,   // self-signed / cert problemi varsa
+    enableArithAbort: true,
+    requestTimeout: 30000
   },
   pool: {
     max: 5,
@@ -62,6 +64,30 @@ function getCurrentDateTime() {
   return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
 }
 
+// Türkçe karakter encoding sorununu düzelt
+function fixTurkishEncoding(text) {
+  if (!text || typeof text !== "string") return text;
+  
+  // Yaygın encoding hatalarını düzelt
+  let fixed = text;
+  
+  // UTF-8 encoding hatalarını düzelt
+  fixed = fixed.replace(/Ãœ/g, "Ü");
+  fixed = fixed.replace(/Ã¼/g, "ü");
+  fixed = fixed.replace(/Ã–/g, "Ö");
+  fixed = fixed.replace(/Ã¶/g, "ö");
+  fixed = fixed.replace(/Ã/g, ",");
+  fixed = fixed.replace(/Ã/g, ",");
+  fixed = fixed.replace(/Ä°/g, "İ");
+  fixed = fixed.replace(/Ä±/g, "ı");
+  fixed = fixed.replace(/Åž/g, "Ş");
+  fixed = fixed.replace(/ÅŸ/g, "ş");
+  fixed = fixed.replace(/ÄŸ/g, "ğ");
+  fixed = fixed.replace(/Ä/g, "Ğ");
+  
+  return fixed;
+}
+
 // Objeyi doğru sırada yeniden oluştur (Kodu ve Adi en üstte)
 function reorderKurItem(item) {
   if (!item || typeof item !== "object") return item;
@@ -89,10 +115,15 @@ function readKurlarFromFile() {
       const parsed = JSON.parse(data);
       const kurlar = parsed.EskisehirDöviz || {};
       
-      // Her bir öğeyi doğru sırada yeniden oluştur
+      // Her bir öğeyi doğru sırada yeniden oluştur ve Türkçe karakterleri düzelt
       const reordered = {};
       for (const [key, value] of Object.entries(kurlar)) {
-        reordered[key] = reorderKurItem(value);
+        const item = reorderKurItem(value);
+        // Adi alanındaki Türkçe karakter sorununu düzelt
+        if (item.Adi) {
+          item.Adi = fixTurkishEncoding(item.Adi);
+        }
+        reordered[key] = item;
       }
       return reordered;
     }
@@ -239,7 +270,12 @@ function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false
 
       // Diğer alanları güncelle (Adi, Kodu)
       existingItem.Kodu = kodu;
-      existingItem.Adi = newItem.Adi || existingItem.Adi || "";
+      // EskisehirDöviz için Türkçe karakter sorununu düzelt
+      let adi = newItem.Adi || existingItem.Adi || "";
+      if (isEskisehirDoviz) {
+        adi = fixTurkishEncoding(adi);
+      }
+      existingItem.Adi = adi;
 
       // Objeyi doğru sırada yeniden oluştur (Kodu ve Adi en üstte)
       updated[kodu] = reorderKurItem(existingItem);
@@ -276,7 +312,10 @@ app.get("/api/kurlar", async (req, res) => {
       const pool = await getPool();
       const result = await pool.request().query(`
         SELECT TOP (50)
-          Kodu, Adi, Alis, Satis
+          Kodu, 
+          CAST(Adi AS NVARCHAR(MAX)) COLLATE Turkish_CI_AS AS Adi, 
+          Alis, 
+          Satis
         FROM dbo.OnlineFiyatlar
         ORDER BY Kodu DESC
       `);
