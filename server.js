@@ -45,7 +45,7 @@ async function getPool() {
       console.log("SQL Server bağlantısı başarılı");
     } catch (err) {
       dbConnected = false;
-      console.warn("SQL Server bağlantısı başarısız, JSON dosyası kullanılacak:", err.message);
+      console.log("SQL Server bağlantısı başarısız");
       poolPromise = null;
       throw err;
     }
@@ -126,11 +126,13 @@ function readKurlarFromFile() {
         }
         reordered[key] = item;
       }
+      console.log("JSON dosyası okundu: EskisehirDöviz");
       return reordered;
     }
+    console.log("JSON dosyası bulunamadı: EskisehirDöviz");
     return {};
   } catch (err) {
-    console.warn("JSON dosyası okunamadı:", err.message);
+    console.log("JSON dosyası okunamadı: EskisehirDöviz");
     return {};
   }
 }
@@ -149,11 +151,13 @@ function readHaremAltinFromFile() {
       for (const [key, value] of Object.entries(haremAltin)) {
         reordered[key] = reorderKurItem(value);
       }
+      console.log("JSON dosyası okundu: HaremAltinDoviz");
       return reordered;
     }
+    console.log("JSON dosyası bulunamadı: HaremAltinDoviz");
     return {};
   } catch (err) {
-    console.warn("JSON dosyası okunamadı:", err.message);
+    console.log("JSON dosyası okunamadı: HaremAltinDoviz");
     return {};
   }
 }
@@ -172,11 +176,13 @@ function readKoprubasiFromFile() {
       for (const [key, value] of Object.entries(koprubasi)) {
         reordered[key] = reorderKurItem(value);
       }
+      console.log("JSON dosyası okundu: KoprubasiDoviz");
       return reordered;
     }
+    console.log("JSON dosyası bulunamadı: KoprubasiDoviz");
     return {};
   } catch (err) {
-    console.warn("JSON dosyası okunamadı:", err.message);
+    console.log("JSON dosyası okunamadı: KoprubasiDoviz");
     return {};
   }
 }
@@ -195,11 +201,13 @@ function readTcmbFromFile() {
       for (const [key, value] of Object.entries(tcmb)) {
         reordered[key] = reorderKurItem(value);
       }
+      console.log("JSON dosyası okundu: Tcmb");
       return reordered;
     }
+    console.log("JSON dosyası bulunamadı: Tcmb");
     return {};
   } catch (err) {
-    console.warn("JSON dosyası okunamadı:", err.message);
+    console.log("JSON dosyası okunamadı: EskisehirDöviz");
     return {};
   }
 }
@@ -246,9 +254,10 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
     }
     
     fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 4), "utf8");
+    console.log("JSON dosyası yazıldı");
     return true;
   } catch (err) {
-    console.error("JSON dosyası yazılamadı:", err.message);
+    console.log("JSON dosyası yazılamadı");
     return false;
   }
 }
@@ -256,14 +265,15 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
 // Köprübaşı API'den veri çek
 async function fetchKoprubasiData() {
   try {
-    const response = await fetch("http://94.54.145.159:81/koprubasi.json");
+    const response = await fetch("http://88.247.58.95:85/Kur/koprubasi.json");
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
+    console.log("Köprübaşı API bağlantısı başarılı");
     return data || [];
   } catch (err) {
-    console.warn("Köprübaşı API'den veri alınamadı:", err.message);
+    console.log("Köprübaşı API bağlantısı başarısız");
     return [];
   }
 }
@@ -296,9 +306,10 @@ async function fetchHaremAltinData() {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
+    console.log("HaremAltin API bağlantısı başarılı");
     return data.data || {};
   } catch (err) {
-    console.warn("Harici API'den veri alınamadı:", err.message);
+    console.log("HaremAltin API bağlantısı başarısız");
     return {};
   }
 }
@@ -347,14 +358,14 @@ async function fetchTcmbData() {
     const jsonData = parser.parse(xmlText);
     
     if (!jsonData || Object.keys(jsonData).length === 0) {
-      console.warn("TCMB XML parse edildi ancak veri bulunamadı");
+      console.log("TCMB XML bağlantısı başarısız");
       return {};
     }
     
+    console.log("TCMB XML bağlantısı başarılı");
     return jsonData || {};
   } catch (err) {
-    console.error("TCMB API'den veri alınamadı:", err.message);
-    console.error("Hata detayı:", err.stack);
+    console.log("TCMB XML bağlantısı başarısız");
     return {};
   }
 }
@@ -365,19 +376,16 @@ function convertTcmbDataToKurFormat(tcmbData) {
   
   try {
     if (!tcmbData || Object.keys(tcmbData).length === 0) {
-      console.warn("TCMB verisi boş");
       return converted;
     }
     
     // TCMB XML yapısı: Tarih_Date.Currency[]
     const tarihDate = tcmbData.Tarih_Date;
     if (!tarihDate) {
-      console.warn("TCMB verisinde Tarih_Date bulunamadı. Veri yapısı:", Object.keys(tcmbData));
       return converted;
     }
     
     if (!tarihDate.Currency) {
-      console.warn("TCMB verisinde Currency bulunamadı. Tarih_Date yapısı:", Object.keys(tarihDate));
       return converted;
     }
     
@@ -392,8 +400,6 @@ function convertTcmbDataToKurFormat(tcmbData) {
       const currencyCode = currency["@_CurrencyCode"] || currency.CurrencyCode || currency["@_Kod"] || currency.Kod;
       
       if (!currencyCode) {
-        // Debug: Currency yapısını logla
-        console.warn("CurrencyCode bulunamadı. Currency yapısı:", Object.keys(currency));
         continue;
       }
       
@@ -418,8 +424,7 @@ function convertTcmbDataToKurFormat(tcmbData) {
       });
     }
   } catch (err) {
-    console.error("TCMB verisi dönüştürülürken hata:", err.message);
-    console.error("Hata detayı:", err.stack);
+    // Hata sessizce yok sayılır
   }
   
   return converted;
@@ -536,7 +541,7 @@ app.get("/api/kurlar", async (req, res) => {
       // Yeni verilerle karşılaştırıp güncelle (EskisehirDöviz için boş değerleri sıfır yap)
       updatedEskisehirData = updateKurlarWithChanges(result.recordset, existingEskisehirData, true);
     } catch (dbError) {
-      console.warn("SQL bağlantısı başarısız:", dbError.message);
+      // SQL bağlantısı zaten getPool() içinde loglanıyor
     }
 
     // Köprübaşı API'den veri çek
@@ -550,12 +555,10 @@ app.get("/api/kurlar", async (req, res) => {
       } else {
         // API'den veri gelmedi, mevcut veriyi koru
         updatedKoprubasiData = existingKoprubasiData;
-        console.warn("Köprübaşı API'den veri gelmedi, mevcut veriler korunuyor");
       }
     } catch (koprubasiError) {
       // Hata durumunda mevcut veriyi koru
       updatedKoprubasiData = existingKoprubasiData;
-      console.warn("Köprübaşı API'den veri alınamadı, mevcut veriler korunuyor:", koprubasiError.message);
     }
 
     // HaremAltin API'den veri çek
@@ -569,12 +572,10 @@ app.get("/api/kurlar", async (req, res) => {
       } else {
         // API'den veri gelmedi, mevcut veriyi koru
         updatedHaremAltinData = existingHaremAltinData;
-        console.warn("HaremAltin API'den veri gelmedi, mevcut veriler korunuyor");
       }
     } catch (haremAltinError) {
       // Hata durumunda mevcut veriyi koru
       updatedHaremAltinData = existingHaremAltinData;
-      console.warn("HaremAltin API'den veri alınamadı, mevcut veriler korunuyor:", haremAltinError.message);
     }
 
     // TCMB API'den veri çek
@@ -582,7 +583,6 @@ app.get("/api/kurlar", async (req, res) => {
       const tcmbData = await fetchTcmbData();
       
       if (!tcmbData || Object.keys(tcmbData).length === 0) {
-        console.warn("TCMB API'den boş veri döndü, mevcut veriler korunuyor");
         updatedTcmbData = existingTcmbData;
       } else {
         const convertedTcmbData = convertTcmbDataToKurFormat(tcmbData);
@@ -593,14 +593,11 @@ app.get("/api/kurlar", async (req, res) => {
         } else {
           // API'den veri gelmedi, mevcut veriyi koru
           updatedTcmbData = existingTcmbData;
-          console.warn("TCMB API'den veri gelmedi veya dönüştürülemedi, mevcut veriler korunuyor");
         }
       }
     } catch (tcmbError) {
       // Hata durumunda mevcut veriyi koru
       updatedTcmbData = existingTcmbData;
-      console.error("TCMB API'den veri alınamadı, mevcut veriler korunuyor:", tcmbError.message);
-      console.error("Hata detayı:", tcmbError.stack);
     }
 
     // Güncellenmiş verileri JSON dosyasına kaydet
@@ -629,7 +626,6 @@ app.get("/api/kurlar", async (req, res) => {
     return res.json(response);
   } catch (err) {
     // Son çare olarak JSON dosyasından oku
-    console.error("Hata:", err.message);
     const kurlar = readKurlarFromFile();
     const koprubasi = readKoprubasiFromFile();
     const haremAltin = readHaremAltinFromFile();
