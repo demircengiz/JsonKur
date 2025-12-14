@@ -62,6 +62,24 @@ function getCurrentDateTime() {
   return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
 }
 
+// Objeyi doğru sırada yeniden oluştur (Kodu ve Adi en üstte)
+function reorderKurItem(item) {
+  if (!item || typeof item !== "object") return item;
+  
+  return {
+    Kodu: item.Kodu || "",
+    Adi: item.Adi || "",
+    Alis: item.Alis || "",
+    Alis_t: item.Alis_t || "",
+    Satis: item.Satis || "",
+    Satis_t: item.Satis_t || "",
+    ...(item.e_Alis && { e_Alis: item.e_Alis }),
+    ...(item.e_Alis_t && { e_Alis_t: item.e_Alis_t }),
+    ...(item.e_Satis && { e_Satis: item.e_Satis }),
+    ...(item.e_Satis_t && { e_Satis_t: item.e_Satis_t })
+  };
+}
+
 // JSON dosyasından veri okuma fonksiyonu
 function readKurlarFromFile() {
   try {
@@ -69,7 +87,14 @@ function readKurlarFromFile() {
     if (fs.existsSync(jsonPath)) {
       const data = fs.readFileSync(jsonPath, "utf8");
       const parsed = JSON.parse(data);
-      return parsed.EskisehirDöviz || {};
+      const kurlar = parsed.EskisehirDöviz || {};
+      
+      // Her bir öğeyi doğru sırada yeniden oluştur
+      const reordered = {};
+      for (const [key, value] of Object.entries(kurlar)) {
+        reordered[key] = reorderKurItem(value);
+      }
+      return reordered;
     }
     return {};
   } catch (err) {
@@ -137,11 +162,18 @@ function updateKurlarWithChanges(newData, existingData) {
       existingItem.Kodu = kodu;
       existingItem.Adi = newItem.Adi || existingItem.Adi || "";
 
-      updated[kodu] = existingItem;
+      // Objeyi doğru sırada yeniden oluştur (Kodu ve Adi en üstte)
+      updated[kodu] = reorderKurItem(existingItem);
     }
   }
 
-  return updated;
+  // Tüm kayıtları doğru sırada yeniden oluştur (değişiklik olmayan kayıtlar için de)
+  const finalUpdated = {};
+  for (const [key, value] of Object.entries(updated)) {
+    finalUpdated[key] = reorderKurItem(value);
+  }
+
+  return finalUpdated;
 }
 
 // Basit health endpoint
