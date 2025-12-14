@@ -64,3 +64,8 @@ app.get("/api/kurlar", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server listening on ${PORT}`);
 });
+
+app.get("/", (req, res) => {
+  res.type("text").send("OK - service is running. Try /health or /api/kurlar");
+});
+
