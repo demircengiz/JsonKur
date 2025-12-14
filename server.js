@@ -334,13 +334,14 @@ async function fetchTcmbData() {
       throw new Error("TCMB API'den boş yanıt alındı");
     }
     
-    // XML'i parse et
+    // XML'i parse et - TCMB XML'inde attribute'lar önemli
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: "@_",
       textNodeName: "#text",
       parseAttributeValue: true,
-      trimValues: true
+      trimValues: true,
+      parseTrueNumberOnly: false
     });
     
     const jsonData = parser.parse(xmlText);
@@ -348,6 +349,13 @@ async function fetchTcmbData() {
     if (!jsonData || Object.keys(jsonData).length === 0) {
       console.warn("TCMB XML parse edildi ancak veri bulunamadı");
       return {};
+    }
+    
+    // Debug: Parse edilen yapıyı logla (sadece ilk seviye)
+    if (jsonData.Tarih_Date) {
+      console.log("TCMB XML başarıyla parse edildi");
+    } else {
+      console.warn("TCMB parse edilen veri yapısı:", Object.keys(jsonData));
     }
     
     return jsonData || {};
@@ -384,24 +392,39 @@ function convertTcmbDataToKurFormat(tcmbData) {
       ? tarihDate.Currency 
       : [tarihDate.Currency];
     
+    console.log(`TCMB: ${currencies.length} adet Currency kaydı bulundu`);
+    
     for (const currency of currencies) {
-      if (currency && currency.CurrencyCode) {
-        // BanknoteBuying ve BanknoteSelling boş olabilir, o durumda boş string kullan
-        const alis = currency.BanknoteBuying || "";
-        const satis = currency.BanknoteSelling || "";
-        
-        // Eğer hem alis hem satis boşsa bu kaydı atla
-        if (alis === "" && satis === "") {
-          continue;
-        }
-        
-        converted.push({
-          Kodu: String(currency.CurrencyCode || ""),
-          Adi: String(currency.CurrencyName || currency.CurrencyCode || ""),
-          Alis: String(alis),
-          Satis: String(satis)
-        });
+      if (!currency) continue;
+      
+      // CurrencyCode attribute olarak (@_CurrencyCode) veya text node olarak gelebilir
+      const currencyCode = currency["@_CurrencyCode"] || currency.CurrencyCode || currency["@_Kod"] || currency.Kod;
+      
+      if (!currencyCode) {
+        // Debug: Currency yapısını logla
+        console.warn("CurrencyCode bulunamadı. Currency yapısı:", Object.keys(currency));
+        continue;
       }
+      
+      // BanknoteBuying ve BanknoteSelling değerlerini al
+      // Bunlar text node olarak gelir
+      const alis = currency.BanknoteBuying || currency["#text"] || "";
+      const satis = currency.BanknoteSelling || "";
+      
+      // CurrencyName veya Isim alanını al
+      const currencyName = currency.CurrencyName || currency.Isim || currencyCode;
+      
+      // Eğer hem alis hem satis boşsa bu kaydı atla
+      if (alis === "" && satis === "") {
+        continue;
+      }
+      
+      converted.push({
+        Kodu: String(currencyCode),
+        Adi: String(currencyName),
+        Alis: String(alis),
+        Satis: String(satis)
+      });
     }
     
     console.log(`TCMB: ${converted.length} adet döviz kuru dönüştürüldü`);
