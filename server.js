@@ -19,7 +19,7 @@ const dbConfig = {
   password: process.env.DB_PASS,
   server: process.env.DB_HOST,     // örn: "1.2.3.4" veya "sql.domain.com"
   database: process.env.DB_NAME,
-  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 1434,
+  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 1433,
   options: {
     encrypt: false,                // Azure SQL ise genelde true gerekir
     trustServerCertificate: true,   // self-signed / cert problemi varsa
