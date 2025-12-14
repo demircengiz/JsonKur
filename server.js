@@ -645,6 +645,28 @@ app.get("/api/kurlar", async (req, res) => {
     res.json({ ...response, error: "Beklenmeyen hata oluştu" });
   }
 });
+// JSON dosyasını oluştur (yoksa)
+function initializeJsonFile() {
+  try {
+    const jsonPath = path.join(__dirname, "kurlar.json");
+    if (!fs.existsSync(jsonPath)) {
+      const initialData = {
+        EskisehirDöviz: {},
+        KoprubasiDoviz: {},
+        HaremAltinDoviz: {},
+        Tcmb: {}
+      };
+      fs.writeFileSync(jsonPath, JSON.stringify(initialData, null, 4), "utf8");
+      console.log("JSON dosyası oluşturuldu");
+    }
+  } catch (err) {
+    console.log("JSON dosyası oluşturulamadı");
+  }
+}
+
+// Sunucu başlatıldığında JSON dosyasını kontrol et ve oluştur
+initializeJsonFile();
+
 app.listen(PORT, () => {
   console.log(`Server listening on ${PORT}`);
 });
