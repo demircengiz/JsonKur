@@ -50,6 +50,18 @@ async function getPool() {
   return poolPromise;
 }
 
+// Şimdiki zamanı formatla (DD.MM.YYYY HH:mm:ss)
+function getCurrentDateTime() {
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, "0");
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const year = now.getFullYear();
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  const seconds = String(now.getSeconds()).padStart(2, "0");
+  return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
+}
+
 // JSON dosyasından veri okuma fonksiyonu
 function readKurlarFromFile() {
   try {
@@ -57,13 +69,79 @@ function readKurlarFromFile() {
     if (fs.existsSync(jsonPath)) {
       const data = fs.readFileSync(jsonPath, "utf8");
       const parsed = JSON.parse(data);
-      return Array.isArray(parsed) ? parsed : parsed.EskisehirDöviz || parsed.kurlar || [];
+      return parsed.EskisehirDöviz || {};
     }
-    return [];
+    return {};
   } catch (err) {
     console.warn("JSON dosyası okunamadı:", err.message);
-    return [];
+    return {};
   }
+}
+
+// JSON dosyasına veri yazma fonksiyonu
+function writeKurlarToFile(data) {
+  try {
+    const jsonPath = path.join(__dirname, "kurlar.json");
+    const jsonData = { EskisehirDöviz: data };
+    fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 4), "utf8");
+    return true;
+  } catch (err) {
+    console.error("JSON dosyası yazılamadı:", err.message);
+    return false;
+  }
+}
+
+// Yeni verileri mevcut JSON ile karşılaştırıp güncelle
+function updateKurlarWithChanges(newData, existingData) {
+  const updated = { ...existingData };
+  const currentTime = getCurrentDateTime();
+
+  // SQL'den gelen veriler array formatında, JSON'daki format object formatında
+  // Her bir yeni kayıt için kontrol et
+  if (Array.isArray(newData)) {
+    for (const newItem of newData) {
+      const kodu = newItem.Kodu;
+      if (!kodu) continue;
+
+      const existingItem = existingData[kodu] || {};
+      const newAlis = String(newItem.Alis || "");
+      const newSatis = String(newItem.Satis || "");
+      const oldAlis = String(existingItem.Alis || "");
+      const oldSatis = String(existingItem.Satis || "");
+
+      // Alis değişti mi?
+      if (newAlis !== oldAlis && newAlis !== "") {
+        // Eski değerleri e_Alis ve e_Alis_t'ye kaydet
+        if (oldAlis !== "") {
+          existingItem.e_Alis = oldAlis;
+          existingItem.e_Alis_t = existingItem.Alis_t || currentTime;
+        }
+        // Yeni değerleri Alis ve Alis_t'ye yaz
+        existingItem.Alis = newAlis;
+        existingItem.Alis_t = currentTime;
+      }
+
+      // Satis değişti mi?
+      if (newSatis !== oldSatis && newSatis !== "") {
+        // Eski değerleri e_Satis ve e_Satis_t'ye kaydet
+        if (oldSatis !== "") {
+          existingItem.e_Satis = oldSatis;
+          existingItem.e_Satis_t = existingItem.Satis_t || currentTime;
+        }
+        // Yeni değerleri Satis ve Satis_t'ye yaz
+        existingItem.Satis = newSatis;
+        existingItem.Satis_t = currentTime;
+      }
+
+      // Diğer alanları güncelle (Adi, Kodu)
+      existingItem.Kodu = kodu;
+      existingItem.Adi = newItem.Adi || existingItem.Adi || "";
+
+      updated[kodu] = existingItem;
+    }
+  }
+
+  return updated;
 }
 
 // Basit health endpoint
@@ -86,8 +164,17 @@ app.get("/api/kurlar", async (req, res) => {
         ORDER BY Kodu DESC
       `);
 
-      // Başarılı olursa SQL'den döndür
-      return res.json({ EskisehirDöviz: result.recordset });
+      // Mevcut JSON dosyasını oku
+      const existingData = readKurlarFromFile();
+      
+      // Yeni verilerle karşılaştırıp güncelle
+      const updatedData = updateKurlarWithChanges(result.recordset, existingData);
+      
+      // Güncellenmiş veriyi JSON dosyasına kaydet
+      writeKurlarToFile(updatedData);
+
+      // Güncellenmiş veriyi döndür
+      return res.json({ EskisehirDöviz: updatedData });
     } catch (dbError) {
       // SQL bağlantısı başarısız olursa JSON dosyasından oku
       console.warn("SQL bağlantısı başarısız, JSON dosyası kullanılıyor:", dbError.message);
