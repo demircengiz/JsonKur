@@ -265,7 +265,7 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
 // Köprübaşı API'den veri çek
 async function fetchKoprubasiData() {
   try {
-    const response = await fetch("http://88.247.58.95:85/Kur/koprubasi.json");
+    const response = await fetch("http://94.54.145.159:81/koprubasi.json");
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -455,13 +455,21 @@ function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false
         newSatis = "0";
       }
       
-      const oldAlis = String(existingItem.Alis || "");
-      const oldSatis = String(existingItem.Satis || "");
+      // Mevcut değerleri de normalize et
+      let oldAlis = String(existingItem.Alis || "");
+      let oldSatis = String(existingItem.Satis || "");
+      
+      if (oldAlis === "" || oldAlis === "null" || oldAlis === "undefined" || oldAlis === "0" || oldAlis === 0 || !oldAlis) {
+        oldAlis = "0";
+      }
+      if (oldSatis === "" || oldSatis === "null" || oldSatis === "undefined" || oldSatis === "0" || oldSatis === 0 || !oldSatis) {
+        oldSatis = "0";
+      }
 
       // Alis değişti mi?
-      if (newAlis !== oldAlis && newAlis !== "") {
-        // Eski değerleri e_Alis ve e_Alis_t'ye kaydet
-        if (oldAlis !== "") {
+      if (newAlis !== oldAlis) {
+        // Eski değerleri e_Alis ve e_Alis_t'ye kaydet (eğer eski değer "0" değilse)
+        if (oldAlis !== "0" && oldAlis !== "") {
           existingItem.e_Alis = oldAlis;
           existingItem.e_Alis_t = existingItem.Alis_t || currentTime;
         }
@@ -471,9 +479,9 @@ function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false
       }
 
       // Satis değişti mi?
-      if (newSatis !== oldSatis && newSatis !== "") {
-        // Eski değerleri e_Satis ve e_Satis_t'ye kaydet
-        if (oldSatis !== "") {
+      if (newSatis !== oldSatis) {
+        // Eski değerleri e_Satis ve e_Satis_t'ye kaydet (eğer eski değer "0" değilse)
+        if (oldSatis !== "0" && oldSatis !== "") {
           existingItem.e_Satis = oldSatis;
           existingItem.e_Satis_t = existingItem.Satis_t || currentTime;
         }
