@@ -187,7 +187,7 @@ function convertHaremAltinDataToKurFormat(haremAltinData) {
 }
 
 // Yeni verileri mevcut JSON ile karşılaştırıp güncelle
-function updateKurlarWithChanges(newData, existingData) {
+function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false) {
   const updated = { ...existingData };
   const currentTime = getCurrentDateTime();
 
@@ -199,8 +199,17 @@ function updateKurlarWithChanges(newData, existingData) {
       if (!kodu) continue;
 
       const existingItem = existingData[kodu] || {};
-      const newAlis = String(newItem.Alis || "");
-      const newSatis = String(newItem.Satis || "");
+      // EskisehirDöviz için boş değerleri sıfır olarak ayarla
+      let newAlis = String(newItem.Alis || "");
+      let newSatis = String(newItem.Satis || "");
+      if (isEskisehirDoviz) {
+        if (newAlis === "" || newAlis === "null" || newAlis === "undefined") {
+          newAlis = "0";
+        }
+        if (newSatis === "" || newSatis === "null" || newSatis === "undefined") {
+          newSatis = "0";
+        }
+      }
       const oldAlis = String(existingItem.Alis || "");
       const oldSatis = String(existingItem.Satis || "");
 
@@ -272,8 +281,8 @@ app.get("/api/kurlar", async (req, res) => {
         ORDER BY Kodu DESC
       `);
 
-      // Yeni verilerle karşılaştırıp güncelle
-      updatedEskisehirData = updateKurlarWithChanges(result.recordset, existingEskisehirData);
+      // Yeni verilerle karşılaştırıp güncelle (EskisehirDöviz için boş değerleri sıfır yap)
+      updatedEskisehirData = updateKurlarWithChanges(result.recordset, existingEskisehirData, true);
     } catch (dbError) {
       console.warn("SQL bağlantısı başarısız:", dbError.message);
     }
