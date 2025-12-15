@@ -81,6 +81,34 @@ function getCurrentDateTime() {
   return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
 }
 
+// Türkiye saatini YYYY-MM-DD HH:mm:ss formatında döndür
+function getCurrentDateTimeISO() {
+  // Türkiye saatine göre tarih/saat al (Europe/Istanbul - UTC+3)
+  const now = new Date();
+  
+  // Türkiye saatini almak için Intl.DateTimeFormat kullan
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(now);
+  const year = parts.find(p => p.type === "year").value;
+  const month = parts.find(p => p.type === "month").value;
+  const day = parts.find(p => p.type === "day").value;
+  const hours = parts.find(p => p.type === "hour").value;
+  const minutes = parts.find(p => p.type === "minute").value;
+  const seconds = parts.find(p => p.type === "second").value;
+  
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 // Türkçe karakter encoding sorununu düzelt
 function fixTurkishEncoding(text) {
   if (!text || typeof text !== "string") return text;
@@ -293,8 +321,7 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
     const finalTcmb = Object.keys(tcmbObj).length > 0 ? tcmbObj : readTcmbFromFile();
     
     // Meta bilgilerini oluştur
-    const currentDateTime = getCurrentDateTime();
-    const generatedAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const generatedAt = getCurrentDateTimeISO();
     
     const jsonData = {
       meta: {
@@ -710,7 +737,7 @@ app.get("/api/kurlar", async (req, res) => {
     writeKurlarToFile(updatedEskisehirData, updatedKoprubasiData, updatedHaremAltinData, updatedTcmbData);
 
     // Meta bilgilerini oluştur
-    const generatedAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const generatedAt = getCurrentDateTimeISO();
     
     // Response oluştur (meta ve data wrapper ile)
     const response = {
@@ -736,7 +763,7 @@ app.get("/api/kurlar", async (req, res) => {
     const tcmb = readTcmbFromFile();
     
     // Meta bilgilerini oluştur
-    const generatedAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const generatedAt = getCurrentDateTimeISO();
     
     // API bağlantısı yoksa bile boş obje oluştur
     const response = {
