@@ -130,43 +130,38 @@ function readKurlarFromFile() {
     if (fs.existsSync(jsonPath)) {
       const data = fs.readFileSync(jsonPath, "utf8");
       const parsed = JSON.parse(data);
-      const kurlar = parsed.EskisehirDöviz || {};
       
-      // Eski format (object with keys) ise array'e çevir
-      if (!Array.isArray(kurlar) && typeof kurlar === 'object') {
-        const reordered = [];
-        for (const [key, value] of Object.entries(kurlar)) {
-          const item = reorderKurItem(value);
-          // Adi alanındaki Türkçe karakter sorununu düzelt
-          if (item.Adi) {
-            item.Adi = fixTurkishEncoding(item.Adi);
-          }
-          reordered.push(item);
-        }
-        console.log("JSON dosyası okundu: EskisehirDöviz (eski format array'e çevrildi)");
-        return reordered;
+      // Yeni format (meta/data) kontrolü
+      let kurlar = {};
+      if (parsed.data && parsed.data.EskisehirDöviz) {
+        kurlar = parsed.data.EskisehirDöviz;
+      } else if (parsed.EskisehirDöviz) {
+        kurlar = parsed.EskisehirDöviz;
       }
       
-      // Yeni format (array) ise direkt kullan
+      // Array formatı ise object'e çevir
       if (Array.isArray(kurlar)) {
-        const reordered = kurlar.map(item => {
-          const reorderedItem = reorderKurItem(item);
-          if (reorderedItem.Adi) {
-            reorderedItem.Adi = fixTurkishEncoding(reorderedItem.Adi);
-          }
-          return reorderedItem;
-        });
-        console.log("JSON dosyası okundu: EskisehirDöviz");
-        return reordered;
+        kurlar = arrayToObject(kurlar);
       }
       
-      return [];
+      // Her bir öğeyi doğru sırada yeniden oluştur ve Türkçe karakterleri düzelt
+      const reordered = {};
+      for (const [key, value] of Object.entries(kurlar)) {
+        const item = reorderKurItem(value);
+        // Adi alanındaki Türkçe karakter sorununu düzelt
+        if (item.Adi) {
+          item.Adi = fixTurkishEncoding(item.Adi);
+        }
+        reordered[key] = item;
+      }
+      console.log("JSON dosyası okundu: EskisehirDöviz");
+      return reordered;
     }
     console.log("JSON dosyası bulunamadı: EskisehirDöviz");
-    return [];
+    return {};
   } catch (err) {
     console.log("JSON dosyası okunamadı: EskisehirDöviz");
-    return [];
+    return {};
   }
 }
 
@@ -177,32 +172,33 @@ function readHaremAltinFromFile() {
     if (fs.existsSync(jsonPath)) {
       const data = fs.readFileSync(jsonPath, "utf8");
       const parsed = JSON.parse(data);
-      const haremAltin = parsed.HaremAltinDoviz || {};
       
-      // Eski format (object with keys) ise array'e çevir
-      if (!Array.isArray(haremAltin) && typeof haremAltin === 'object') {
-        const reordered = [];
-        for (const [key, value] of Object.entries(haremAltin)) {
-          reordered.push(reorderKurItem(value));
-        }
-        console.log("JSON dosyası okundu: HaremAltinDoviz (eski format array'e çevrildi)");
-        return reordered;
+      // Yeni format (meta/data) kontrolü
+      let haremAltin = {};
+      if (parsed.data && parsed.data.HaremAltinDoviz) {
+        haremAltin = parsed.data.HaremAltinDoviz;
+      } else if (parsed.HaremAltinDoviz) {
+        haremAltin = parsed.HaremAltinDoviz;
       }
       
-      // Yeni format (array) ise direkt kullan
+      // Array formatı ise object'e çevir
       if (Array.isArray(haremAltin)) {
-        const reordered = haremAltin.map(item => reorderKurItem(item));
-        console.log("JSON dosyası okundu: HaremAltinDoviz");
-        return reordered;
+        haremAltin = arrayToObject(haremAltin);
       }
       
-      return [];
+      // Her bir öğeyi doğru sırada yeniden oluştur
+      const reordered = {};
+      for (const [key, value] of Object.entries(haremAltin)) {
+        reordered[key] = reorderKurItem(value);
+      }
+      console.log("JSON dosyası okundu: HaremAltinDoviz");
+      return reordered;
     }
     console.log("JSON dosyası bulunamadı: HaremAltinDoviz");
-    return [];
+    return {};
   } catch (err) {
     console.log("JSON dosyası okunamadı: HaremAltinDoviz");
-    return [];
+    return {};
   }
 }
 
@@ -213,32 +209,33 @@ function readKoprubasiFromFile() {
     if (fs.existsSync(jsonPath)) {
       const data = fs.readFileSync(jsonPath, "utf8");
       const parsed = JSON.parse(data);
-      const koprubasi = parsed.KoprubasiDoviz || {};
       
-      // Eski format (object with keys) ise array'e çevir
-      if (!Array.isArray(koprubasi) && typeof koprubasi === 'object') {
-        const reordered = [];
-        for (const [key, value] of Object.entries(koprubasi)) {
-          reordered.push(reorderKurItem(value));
-        }
-        console.log("JSON dosyası okundu: KoprubasiDoviz (eski format array'e çevrildi)");
-        return reordered;
+      // Yeni format (meta/data) kontrolü
+      let koprubasi = {};
+      if (parsed.data && parsed.data.KoprubasiDoviz) {
+        koprubasi = parsed.data.KoprubasiDoviz;
+      } else if (parsed.KoprubasiDoviz) {
+        koprubasi = parsed.KoprubasiDoviz;
       }
       
-      // Yeni format (array) ise direkt kullan
+      // Array formatı ise object'e çevir
       if (Array.isArray(koprubasi)) {
-        const reordered = koprubasi.map(item => reorderKurItem(item));
-        console.log("JSON dosyası okundu: KoprubasiDoviz");
-        return reordered;
+        koprubasi = arrayToObject(koprubasi);
       }
       
-      return [];
+      // Her bir öğeyi doğru sırada yeniden oluştur
+      const reordered = {};
+      for (const [key, value] of Object.entries(koprubasi)) {
+        reordered[key] = reorderKurItem(value);
+      }
+      console.log("JSON dosyası okundu: KoprubasiDoviz");
+      return reordered;
     }
     console.log("JSON dosyası bulunamadı: KoprubasiDoviz");
-    return [];
+    return {};
   } catch (err) {
     console.log("JSON dosyası okunamadı: KoprubasiDoviz");
-    return [];
+    return {};
   }
 }
 
@@ -249,32 +246,33 @@ function readTcmbFromFile() {
     if (fs.existsSync(jsonPath)) {
       const data = fs.readFileSync(jsonPath, "utf8");
       const parsed = JSON.parse(data);
-      const tcmb = parsed.Tcmb || {};
       
-      // Eski format (object with keys) ise array'e çevir
-      if (!Array.isArray(tcmb) && typeof tcmb === 'object') {
-        const reordered = [];
-        for (const [key, value] of Object.entries(tcmb)) {
-          reordered.push(reorderKurItem(value));
-        }
-        console.log("JSON dosyası okundu: Tcmb (eski format array'e çevrildi)");
-        return reordered;
+      // Yeni format (meta/data) kontrolü
+      let tcmb = {};
+      if (parsed.data && parsed.data.Tcmb) {
+        tcmb = parsed.data.Tcmb;
+      } else if (parsed.Tcmb) {
+        tcmb = parsed.Tcmb;
       }
       
-      // Yeni format (array) ise direkt kullan
+      // Array formatı ise object'e çevir
       if (Array.isArray(tcmb)) {
-        const reordered = tcmb.map(item => reorderKurItem(item));
-        console.log("JSON dosyası okundu: Tcmb");
-        return reordered;
+        tcmb = arrayToObject(tcmb);
       }
       
-      return [];
+      // Her bir öğeyi doğru sırada yeniden oluştur
+      const reordered = {};
+      for (const [key, value] of Object.entries(tcmb)) {
+        reordered[key] = reorderKurItem(value);
+      }
+      console.log("JSON dosyası okundu: Tcmb");
+      return reordered;
     }
     console.log("JSON dosyası bulunamadı: Tcmb");
-    return [];
+    return {};
   } catch (err) {
     console.log("JSON dosyası okunamadı: Tcmb");
-    return [];
+    return {};
   }
 }
 
@@ -282,44 +280,43 @@ function readTcmbFromFile() {
 function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData = null, tcmbData = null) {
   try {
     const jsonPath = path.join(__dirname, "kurlar.json");
-    const jsonData = { 
-      EskisehirDöviz: Array.isArray(eskisehirData) ? eskisehirData : []
+    
+    // Verileri object formatına çevir
+    const eskisehirObj = arrayToObject(eskisehirData);
+    const koprubasiObj = koprubasiData ? arrayToObject(koprubasiData) : readKoprubasiFromFile();
+    const haremAltinObj = haremAltinData ? arrayToObject(haremAltinData) : readHaremAltinFromFile();
+    const tcmbObj = tcmbData ? arrayToObject(tcmbData) : readTcmbFromFile();
+    
+    // Mevcut verileri koru (eğer yeni veri yoksa)
+    const finalKoprubasi = Object.keys(koprubasiObj).length > 0 ? koprubasiObj : readKoprubasiFromFile();
+    const finalHaremAltin = Object.keys(haremAltinObj).length > 0 ? haremAltinObj : readHaremAltinFromFile();
+    const finalTcmb = Object.keys(tcmbObj).length > 0 ? tcmbObj : readTcmbFromFile();
+    
+    // Meta bilgilerini oluştur
+    const currentDateTime = getCurrentDateTime();
+    const generatedAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    
+    const jsonData = {
+      meta: {
+        generated_at: generatedAt,
+        cache_ttl: 30,
+        sources: ["EskisehirDöviz", "KoprubasiDoviz", "HaremAltinDoviz", "Tcmb"]
+      },
+      data: {
+        EskisehirDöviz: Object.keys(eskisehirObj).length > 0 ? eskisehirObj : {},
+        KoprubasiDoviz: Object.keys(finalKoprubasi).length > 0 ? finalKoprubasi : {},
+        HaremAltinDoviz: Object.keys(finalHaremAltin).length > 0 ? finalHaremAltin : {},
+        Tcmb: Object.keys(finalTcmb).length > 0 ? finalTcmb : {}
+      }
     };
     
-    // KoprubasiDoviz verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru veya boş array oluştur
-    if (koprubasiData && Array.isArray(koprubasiData) && koprubasiData.length > 0) {
-      jsonData.KoprubasiDoviz = koprubasiData;
-    } else {
-      // Mevcut KoprubasiDoviz verisini koru, yoksa boş array oluştur
-      const existing = readKoprubasiFromFile();
-      jsonData.KoprubasiDoviz = Array.isArray(existing) && existing.length > 0 ? existing : [];
-    }
-    
-    // HaremAltinDoviz verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru veya boş array oluştur
-    if (haremAltinData && Array.isArray(haremAltinData) && haremAltinData.length > 0) {
-      jsonData.HaremAltinDoviz = haremAltinData;
-    } else {
-      // Mevcut HaremAltinDoviz verisini koru, yoksa boş array oluştur
-      const existing = readHaremAltinFromFile();
-      jsonData.HaremAltinDoviz = Array.isArray(existing) && existing.length > 0 ? existing : [];
-    }
-    
-    // Tcmb verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru veya boş array oluştur
-    if (tcmbData && Array.isArray(tcmbData) && tcmbData.length > 0) {
-      jsonData.Tcmb = tcmbData;
-    } else {
-      // Mevcut Tcmb verisini koru, yoksa boş array oluştur
-      const existing = readTcmbFromFile();
-      jsonData.Tcmb = Array.isArray(existing) && existing.length > 0 ? existing : [];
-    }
-    
-      fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 4), "utf8");
-      console.log("JSON dosyası yazıldı");
-      return true;
-    } catch (err) {
-      console.log("JSON dosyası yazılamadı");
-      return false;
-    }
+    fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 4), "utf8");
+    console.log("JSON dosyası yazıldı");
+    return true;
+  } catch (err) {
+    console.log("JSON dosyası yazılamadı");
+    return false;
+  }
 }
 
 // Köprübaşı API'den veri çek
@@ -490,27 +487,50 @@ function convertTcmbDataToKurFormat(tcmbData) {
   return converted;
 }
 
-// Yeni verileri mevcut JSON ile karşılaştırıp güncelle
-function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false) {
-  // Mevcut veriyi array formatına çevir (eski format desteği için)
-  let existingArray = [];
-  if (Array.isArray(existingData)) {
-    existingArray = [...existingData];
-  } else if (existingData && typeof existingData === 'object') {
-    // Eski format (object with keys) ise array'e çevir
-    existingArray = Object.values(existingData);
+// Array formatındaki veriyi object formatına çevir (key-value pairs)
+function arrayToObject(dataArray) {
+  if (!Array.isArray(dataArray)) {
+    // Zaten object ise direkt dön
+    if (dataArray && typeof dataArray === 'object') {
+      return dataArray;
+    }
+    return {};
   }
   
-  // Mevcut veriyi Kodu'ya göre map'e çevir (hızlı erişim için)
-  const existingMap = new Map();
-  for (const item of existingArray) {
+  const result = {};
+  for (const item of dataArray) {
     if (item && item.Kodu) {
-      existingMap.set(item.Kodu, { ...item });
+      result[item.Kodu] = reorderKurItem(item);
     }
+  }
+  return result;
+}
+
+// Object formatındaki veriyi array formatına çevir
+function objectToArray(dataObject) {
+  if (Array.isArray(dataObject)) {
+    return dataObject;
+  }
+  
+  if (!dataObject || typeof dataObject !== 'object') {
+    return [];
+  }
+  
+  return Object.values(dataObject);
+}
+
+// Yeni verileri mevcut JSON ile karşılaştırıp güncelle
+function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false) {
+  // Mevcut veriyi object formatına çevir
+  let existingObject = {};
+  if (Array.isArray(existingData)) {
+    existingObject = arrayToObject(existingData);
+  } else if (existingData && typeof existingData === 'object') {
+    existingObject = { ...existingData };
   }
   
   const currentTime = getCurrentDateTime();
-  const updatedMap = new Map(existingMap);
+  const updated = { ...existingObject };
 
   // SQL'den gelen veriler array formatında
   // Her bir yeni kayıt için kontrol et
@@ -519,7 +539,7 @@ function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false
       const kodu = newItem.Kodu;
       if (!kodu) continue;
 
-      const existingItem = existingMap.get(kodu) || {};
+      const existingItem = existingObject[kodu] || {};
       // Tüm kaynaklar için boş veya 0 değerleri "0" olarak ayarla
       let newAlis = String(newItem.Alis || "");
       let newSatis = String(newItem.Satis || "");
@@ -577,12 +597,15 @@ function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false
       existingItem.Adi = adi;
 
       // Objeyi doğru sırada yeniden oluştur (Kodu ve Adi en üstte)
-      updatedMap.set(kodu, reorderKurItem(existingItem));
+      updated[kodu] = reorderKurItem(existingItem);
     }
   }
 
-  // Map'ten array'e çevir
-  const finalUpdated = Array.from(updatedMap.values());
+  // Tüm kayıtları doğru sırada yeniden oluştur (değişiklik olmayan kayıtlar için de)
+  const finalUpdated = {};
+  for (const [key, value] of Object.entries(updated)) {
+    finalUpdated[key] = reorderKurItem(value);
+  }
 
   return finalUpdated;
 }
@@ -623,8 +646,8 @@ app.get("/api/kurlar", async (req, res) => {
       // Yeni verilerle karşılaştırıp güncelle (EskisehirDöviz için boş değerleri sıfır yap)
       updatedEskisehirData = updateKurlarWithChanges(result.recordset, existingEskisehirData, true);
     } catch (dbError) {
-      // SQL bağlantısı başarısız, mevcut veriyi koru veya boş array oluştur
-      updatedEskisehirData = Array.isArray(existingEskisehirData) && existingEskisehirData.length > 0 ? existingEskisehirData : [];
+      // SQL bağlantısı başarısız, mevcut veriyi koru veya boş obje oluştur
+      updatedEskisehirData = existingEskisehirData && Object.keys(existingEskisehirData).length > 0 ? existingEskisehirData : {};
     }
 
     // Köprübaşı API'den veri çek
@@ -636,12 +659,12 @@ app.get("/api/kurlar", async (req, res) => {
       if (convertedKoprubasiData && convertedKoprubasiData.length > 0) {
         updatedKoprubasiData = updateKurlarWithChanges(convertedKoprubasiData, existingKoprubasiData);
       } else {
-        // API'den veri gelmedi, mevcut veriyi koru veya boş array oluştur
-        updatedKoprubasiData = Array.isArray(existingKoprubasiData) && existingKoprubasiData.length > 0 ? existingKoprubasiData : [];
+        // API'den veri gelmedi, mevcut veriyi koru veya boş obje oluştur
+        updatedKoprubasiData = existingKoprubasiData && Object.keys(existingKoprubasiData).length > 0 ? existingKoprubasiData : {};
       }
     } catch (koprubasiError) {
-      // Hata durumunda mevcut veriyi koru veya boş array oluştur
-      updatedKoprubasiData = Array.isArray(existingKoprubasiData) && existingKoprubasiData.length > 0 ? existingKoprubasiData : [];
+      // Hata durumunda mevcut veriyi koru veya boş obje oluştur
+      updatedKoprubasiData = existingKoprubasiData && Object.keys(existingKoprubasiData).length > 0 ? existingKoprubasiData : {};
     }
 
     // HaremAltin API'den veri çek
@@ -653,12 +676,12 @@ app.get("/api/kurlar", async (req, res) => {
       if (convertedHaremAltinData && convertedHaremAltinData.length > 0) {
         updatedHaremAltinData = updateKurlarWithChanges(convertedHaremAltinData, existingHaremAltinData);
       } else {
-        // API'den veri gelmedi, mevcut veriyi koru veya boş array oluştur
-        updatedHaremAltinData = Array.isArray(existingHaremAltinData) && existingHaremAltinData.length > 0 ? existingHaremAltinData : [];
+        // API'den veri gelmedi, mevcut veriyi koru veya boş obje oluştur
+        updatedHaremAltinData = existingHaremAltinData && Object.keys(existingHaremAltinData).length > 0 ? existingHaremAltinData : {};
       }
     } catch (haremAltinError) {
-      // Hata durumunda mevcut veriyi koru veya boş array oluştur
-      updatedHaremAltinData = Array.isArray(existingHaremAltinData) && existingHaremAltinData.length > 0 ? existingHaremAltinData : [];
+      // Hata durumunda mevcut veriyi koru veya boş obje oluştur
+      updatedHaremAltinData = existingHaremAltinData && Object.keys(existingHaremAltinData).length > 0 ? existingHaremAltinData : {};
     }
 
     // TCMB API'den veri çek
@@ -666,7 +689,7 @@ app.get("/api/kurlar", async (req, res) => {
       const tcmbData = await fetchTcmbData();
       
       if (!tcmbData || Object.keys(tcmbData).length === 0) {
-        updatedTcmbData = Array.isArray(existingTcmbData) && existingTcmbData.length > 0 ? existingTcmbData : [];
+        updatedTcmbData = existingTcmbData && Object.keys(existingTcmbData).length > 0 ? existingTcmbData : {};
       } else {
         const convertedTcmbData = convertTcmbDataToKurFormat(tcmbData);
         
@@ -674,25 +697,34 @@ app.get("/api/kurlar", async (req, res) => {
         if (convertedTcmbData && convertedTcmbData.length > 0) {
           updatedTcmbData = updateKurlarWithChanges(convertedTcmbData, existingTcmbData);
         } else {
-          // API'den veri gelmedi, mevcut veriyi koru veya boş array oluştur
-          updatedTcmbData = Array.isArray(existingTcmbData) && existingTcmbData.length > 0 ? existingTcmbData : [];
+          // API'den veri gelmedi, mevcut veriyi koru veya boş obje oluştur
+          updatedTcmbData = existingTcmbData && Object.keys(existingTcmbData).length > 0 ? existingTcmbData : {};
         }
       }
     } catch (tcmbError) {
-      // Hata durumunda mevcut veriyi koru veya boş array oluştur
-      updatedTcmbData = Array.isArray(existingTcmbData) && existingTcmbData.length > 0 ? existingTcmbData : [];
+      // Hata durumunda mevcut veriyi koru veya boş obje oluştur
+      updatedTcmbData = existingTcmbData && Object.keys(existingTcmbData).length > 0 ? existingTcmbData : {};
     }
 
     // Güncellenmiş verileri JSON dosyasına kaydet
     writeKurlarToFile(updatedEskisehirData, updatedKoprubasiData, updatedHaremAltinData, updatedTcmbData);
 
-    // Response oluştur (doğru sırada: EskisehirDöviz, KoprubasiDoviz, HaremAltinDoviz, Tcmb)
-    // API bağlantısı yoksa bile boş array oluştur
-    const response = { 
-      EskisehirDöviz: Array.isArray(updatedEskisehirData) ? updatedEskisehirData : [],
-      KoprubasiDoviz: Array.isArray(updatedKoprubasiData) ? updatedKoprubasiData : [],
-      HaremAltinDoviz: Array.isArray(updatedHaremAltinData) ? updatedHaremAltinData : [],
-      Tcmb: Array.isArray(updatedTcmbData) ? updatedTcmbData : []
+    // Meta bilgilerini oluştur
+    const generatedAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    
+    // Response oluştur (meta ve data wrapper ile)
+    const response = {
+      meta: {
+        generated_at: generatedAt,
+        cache_ttl: 30,
+        sources: ["EskisehirDöviz", "KoprubasiDoviz", "HaremAltinDoviz", "Tcmb"]
+      },
+      data: {
+        EskisehirDöviz: updatedEskisehirData || {},
+        KoprubasiDoviz: updatedKoprubasiData || {},
+        HaremAltinDoviz: updatedHaremAltinData || {},
+        Tcmb: updatedTcmbData || {}
+      }
     };
 
     return res.json(response);
@@ -703,15 +735,26 @@ app.get("/api/kurlar", async (req, res) => {
     const haremAltin = readHaremAltinFromFile();
     const tcmb = readTcmbFromFile();
     
-    // API bağlantısı yoksa bile boş array oluştur
-    const response = { 
-      EskisehirDöviz: Array.isArray(kurlar) ? kurlar : [],
-      KoprubasiDoviz: Array.isArray(koprubasi) ? koprubasi : [],
-      HaremAltinDoviz: Array.isArray(haremAltin) ? haremAltin : [],
-      Tcmb: Array.isArray(tcmb) ? tcmb : []
+    // Meta bilgilerini oluştur
+    const generatedAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    
+    // API bağlantısı yoksa bile boş obje oluştur
+    const response = {
+      meta: {
+        generated_at: generatedAt,
+        cache_ttl: 30,
+        sources: ["EskisehirDöviz", "KoprubasiDoviz", "HaremAltinDoviz", "Tcmb"]
+      },
+      data: {
+        EskisehirDöviz: kurlar || {},
+        KoprubasiDoviz: koprubasi || {},
+        HaremAltinDoviz: haremAltin || {},
+        Tcmb: tcmb || {}
+      },
+      error: "Beklenmeyen hata oluştu"
     };
     
-    res.json({ ...response, error: "Beklenmeyen hata oluştu" });
+    res.json(response);
   }
 });
 app.listen(PORT, () => {
