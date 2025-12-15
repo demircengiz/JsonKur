@@ -233,40 +233,34 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
   try {
     const jsonPath = path.join(__dirname, "kurlar.json");
     const jsonData = { 
-      EskisehirDöviz: eskisehirData 
+      EskisehirDöviz: eskisehirData || {}
     };
     
-    // KoprubasiDoviz verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru
+    // KoprubasiDoviz verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru veya boş obje oluştur
     if (koprubasiData && Object.keys(koprubasiData).length > 0) {
       jsonData.KoprubasiDoviz = koprubasiData;
     } else {
-      // Mevcut KoprubasiDoviz verisini koru
+      // Mevcut KoprubasiDoviz verisini koru, yoksa boş obje oluştur
       const existing = readKoprubasiFromFile();
-      if (Object.keys(existing).length > 0) {
-        jsonData.KoprubasiDoviz = existing;
-      }
+      jsonData.KoprubasiDoviz = Object.keys(existing).length > 0 ? existing : {};
     }
     
-    // HaremAltinDoviz verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru
+    // HaremAltinDoviz verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru veya boş obje oluştur
     if (haremAltinData && Object.keys(haremAltinData).length > 0) {
       jsonData.HaremAltinDoviz = haremAltinData;
     } else {
-      // Mevcut HaremAltinDoviz verisini koru
+      // Mevcut HaremAltinDoviz verisini koru, yoksa boş obje oluştur
       const existing = readHaremAltinFromFile();
-      if (Object.keys(existing).length > 0) {
-        jsonData.HaremAltinDoviz = existing;
-      }
+      jsonData.HaremAltinDoviz = Object.keys(existing).length > 0 ? existing : {};
     }
     
-    // Tcmb verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru
+    // Tcmb verisi varsa ve boş değilse ekle, yoksa mevcut veriyi koru veya boş obje oluştur
     if (tcmbData && Object.keys(tcmbData).length > 0) {
       jsonData.Tcmb = tcmbData;
     } else {
-      // Mevcut Tcmb verisini koru
+      // Mevcut Tcmb verisini koru, yoksa boş obje oluştur
       const existing = readTcmbFromFile();
-      if (Object.keys(existing).length > 0) {
-        jsonData.Tcmb = existing;
-      }
+      jsonData.Tcmb = Object.keys(existing).length > 0 ? existing : {};
     }
     
       fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 4), "utf8");
@@ -630,23 +624,11 @@ app.get("/api/kurlar", async (req, res) => {
 
     // Response oluştur (doğru sırada: EskisehirDöviz, KoprubasiDoviz, HaremAltinDoviz, Tcmb)
     const response = { 
-      EskisehirDöviz: updatedEskisehirData 
+      EskisehirDöviz: updatedEskisehirData || {},
+      KoprubasiDoviz: updatedKoprubasiData || {},
+      HaremAltinDoviz: updatedHaremAltinData || {},
+      Tcmb: updatedTcmbData || {}
     };
-    
-    // KoprubasiDoviz verisi varsa ekle
-    if (Object.keys(updatedKoprubasiData).length > 0) {
-      response.KoprubasiDoviz = updatedKoprubasiData;
-    }
-    
-    // HaremAltinDoviz verisi varsa ekle
-    if (Object.keys(updatedHaremAltinData).length > 0) {
-      response.HaremAltinDoviz = updatedHaremAltinData;
-    }
-    
-    // Tcmb verisi varsa ekle
-    if (Object.keys(updatedTcmbData).length > 0) {
-      response.Tcmb = updatedTcmbData;
-    }
 
     return res.json(response);
   } catch (err) {
@@ -656,16 +638,12 @@ app.get("/api/kurlar", async (req, res) => {
     const haremAltin = readHaremAltinFromFile();
     const tcmb = readTcmbFromFile();
     
-    const response = { EskisehirDöviz: kurlar };
-    if (Object.keys(koprubasi).length > 0) {
-      response.KoprubasiDoviz = koprubasi;
-    }
-    if (Object.keys(haremAltin).length > 0) {
-      response.HaremAltinDoviz = haremAltin;
-    }
-    if (Object.keys(tcmb).length > 0) {
-      response.Tcmb = tcmb;
-    }
+    const response = { 
+      EskisehirDöviz: kurlar || {},
+      KoprubasiDoviz: koprubasi || {},
+      HaremAltinDoviz: haremAltin || {},
+      Tcmb: tcmb || {}
+    };
     
     res.json({ ...response, error: "Beklenmeyen hata oluştu" });
   }
