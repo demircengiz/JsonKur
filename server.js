@@ -349,7 +349,7 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
 // Köprübaşı API'den veri çek
 async function fetchKoprubasiData() {
   try {
-    const response = await fetch("http://188.247.58.95:85/Kur/koprubasi.json");
+    const response = await fetch("http://88.247.58.95:85/Kur/koprubasi.json");
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
