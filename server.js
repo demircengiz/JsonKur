@@ -10,6 +10,18 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// CORS ve JSON middleware
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+app.use(express.json());
+
 // Render: PORT env var'ını dinlemelisin
 const PORT = process.env.PORT || 3000;
 
@@ -346,19 +358,32 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
   }
 }
 
-// Köprübaşı API'den veri çek
+// Köprübaşı API'den veri çek (tetikleyici sayfayı önce çağır)
 async function fetchKoprubasiData() {
   try {
+    // Önce tetikleyici sayfayı çağrı (dosya üretimini tetikle)
+    try {
+      await fetch("http://88.247.58.95:85/Kur/", { timeout: 5000 });
+      console.log("Köprübaşı tetikleyici sayfası çağrıldı");
+    } catch (triggerError) {
+      console.warn(`Köprübaşı tetikleyici hatası (devam ediliyor): ${triggerError.message}`);
+    }
+    
+    // Dosya oluşturulması için kısa bir bekleme
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Şimdi koprubasi.json dosyasını çek
     const response = await fetch("http://88.247.58.95:85/Kur/koprubasi.json");
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
     console.log("Köprübaşı API bağlantısı başarılı");
-    return data || [];
+    return { data: data || [], error: null };
   } catch (err) {
-    console.log("Köprübaşı API bağlantısı başarısız");
-    return [];
+    const errorMsg = `Köprübaşı API bağlantısı başarısız: ${err.message}`;
+    console.error(errorMsg);
+    return { data: [], error: errorMsg };
   }
 }
 
@@ -391,10 +416,11 @@ async function fetchHaremAltinData() {
     }
     const data = await response.json();
     console.log("HaremAltin API bağlantısı başarılı");
-    return data.data || {};
+    return { data: data.data || {}, error: null };
   } catch (err) {
-    console.log("HaremAltin API bağlantısı başarısız");
-    return {};
+    const errorMsg = `HaremAltin API bağlantısı başarısız: ${err.message}`;
+    console.error(errorMsg);
+    return { data: {}, error: errorMsg };
   }
 }
 
@@ -442,15 +468,15 @@ async function fetchTcmbData() {
     const jsonData = parser.parse(xmlText);
     
     if (!jsonData || Object.keys(jsonData).length === 0) {
-      console.log("TCMB XML bağlantısı başarısız");
-      return {};
+      throw new Error("TCMB XML parse hatasında boş veri");
     }
     
     console.log("TCMB XML bağlantısı başarılı");
-    return jsonData || {};
+    return { data: jsonData, error: null };
   } catch (err) {
-    console.log("TCMB XML bağlantısı başarısız");
-    return {};
+    const errorMsg = `TCMB XML bağlantısı başarısız: ${err.message}`;
+    console.error(errorMsg);
+    return { data: {}, error: errorMsg };
   }
 }
 
@@ -673,13 +699,17 @@ app.get("/api/kurlar", async (req, res) => {
       // Yeni verilerle karşılaştırıp güncelle (EskisehirDöviz için boş değerleri sıfır yap)
       updatedEskisehirData = updateKurlarWithChanges(result.recordset, existingEskisehirData, true);
     } catch (dbError) {
+      console.error(`SQL Server bağlantı hatası: ${dbError.message}`);
       // SQL bağlantısı başarısız, mevcut veriyi koru veya boş obje oluştur
       updatedEskisehirData = existingEskisehirData && Object.keys(existingEskisehirData).length > 0 ? existingEskisehirData : {};
     }
 
     // Köprübaşı API'den veri çek
     try {
-      const koprubasiData = await fetchKoprubasiData();
+      const { data: koprubasiData, error: koprubasiError } = await fetchKoprubasiData();
+      if (koprubasiError) {
+        console.warn(`Köprübaşı hatası: ${koprubasiError}`);
+      }
       const convertedKoprubasiData = convertKoprubasiDataToKurFormat(koprubasiData);
       
       // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
@@ -690,13 +720,17 @@ app.get("/api/kurlar", async (req, res) => {
         updatedKoprubasiData = existingKoprubasiData && Object.keys(existingKoprubasiData).length > 0 ? existingKoprubasiData : {};
       }
     } catch (koprubasiError) {
+      console.error(`Köprübaşı işleme hatası: ${koprubasiError.message}`);
       // Hata durumunda mevcut veriyi koru veya boş obje oluştur
       updatedKoprubasiData = existingKoprubasiData && Object.keys(existingKoprubasiData).length > 0 ? existingKoprubasiData : {};
     }
 
     // HaremAltin API'den veri çek
     try {
-      const haremAltinData = await fetchHaremAltinData();
+      const { data: haremAltinData, error: haremAltinError } = await fetchHaremAltinData();
+      if (haremAltinError) {
+        console.warn(`HaremAltin hatası: ${haremAltinError}`);
+      }
       const convertedHaremAltinData = convertHaremAltinDataToKurFormat(haremAltinData);
       
       // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
@@ -707,13 +741,17 @@ app.get("/api/kurlar", async (req, res) => {
         updatedHaremAltinData = existingHaremAltinData && Object.keys(existingHaremAltinData).length > 0 ? existingHaremAltinData : {};
       }
     } catch (haremAltinError) {
+      console.error(`HaremAltin işleme hatası: ${haremAltinError.message}`);
       // Hata durumunda mevcut veriyi koru veya boş obje oluştur
       updatedHaremAltinData = existingHaremAltinData && Object.keys(existingHaremAltinData).length > 0 ? existingHaremAltinData : {};
     }
 
     // TCMB API'den veri çek
     try {
-      const tcmbData = await fetchTcmbData();
+      const { data: tcmbData, error: tcmbError } = await fetchTcmbData();
+      if (tcmbError) {
+        console.warn(`TCMB hatası: ${tcmbError}`);
+      }
       
       if (!tcmbData || Object.keys(tcmbData).length === 0) {
         updatedTcmbData = existingTcmbData && Object.keys(existingTcmbData).length > 0 ? existingTcmbData : {};
@@ -729,6 +767,7 @@ app.get("/api/kurlar", async (req, res) => {
         }
       }
     } catch (tcmbError) {
+      console.error(`TCMB işleme hatası: ${tcmbError.message}`);
       // Hata durumunda mevcut veriyi koru veya boş obje oluştur
       updatedTcmbData = existingTcmbData && Object.keys(existingTcmbData).length > 0 ? existingTcmbData : {};
     }
