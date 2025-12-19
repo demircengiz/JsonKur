@@ -416,36 +416,25 @@ function convertKoprubasiDataToKurFormat(koprubasiData) {
 
 // Hareci API'den altın/döviz verilerini çek
 async function fetchHaremAltinData(retryCount = 0) {
-  const maxRetries = 2;
   const endpoint = "https://canlipiyasalar.haremaltin.com/tmp/altin.json?dil_kodu=tr";
   
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000); // 10 saniye timeout
-      
-      const response = await fetch(endpoint, { signal: controller.signal });
-      clearTimeout(timeout);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      console.log("HaremAltin API bağlantısı başarılı");
-      return { data: data.data || {}, error: null };
-    } catch (err) {
-      console.warn(`HaremAltin API deneme ${attempt + 1}/${maxRetries + 1} başarısız: ${err.message}`);
-      if (attempt < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } else {
-        const errorMsg = `HaremAltin API bağlantısı başarısız: ${err.message}`;
-        console.error(errorMsg);
-        return { data: {}, error: errorMsg };
-      }
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000); // 5 saniye timeout
+    
+    const response = await fetch(endpoint, { signal: controller.signal });
+    clearTimeout(timeout);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    const data = await response.json();
+    console.log("HaremAltin API bağlantısı başarılı");
+    return { data: data.data || {}, error: null };
+  } catch (err) {
+    console.warn(`HaremAltin API başarısız (hızlı geçiliyor): ${err.message}`);
+    return { data: {}, error: null };
   }
-  
-  return { data: {}, error: "HaremAltin API tüm deneme sonrası başarısız" };
 }
 
 // Harici API verilerini mevcut formata dönüştür
