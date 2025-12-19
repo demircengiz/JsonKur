@@ -267,10 +267,8 @@ function writeKurlarToFile(eskisehirData, tcmbData = null) {
         cache_ttl: 30,
         sources: ["EskisehirDöviz", "Tcmb"]
       },
-      data: {
-        EskisehirDöviz: Object.keys(eskisehirObj).length > 0 ? eskisehirObj : {},
-        Tcmb: Object.keys(finalTcmb).length > 0 ? finalTcmb : {}
-      }
+      EskisehirDöviz: Object.keys(eskisehirObj).length > 0 ? eskisehirObj : {},
+      Tcmb: Object.keys(finalTcmb).length > 0 ? finalTcmb : {}
     };
     
     fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 4), "utf8");
@@ -610,17 +608,15 @@ app.get("/api/kurlar", async (req, res) => {
     // Meta bilgilerini oluştur
     const generatedAt = getCurrentDateTimeISO();
     
-    // Response oluştur (meta ve data wrapper ile)
+    // Response oluştur
     const response = {
       meta: {
         generated_at: generatedAt,
         cache_ttl: 30,
         sources: ["EskisehirDöviz", "Tcmb"]
       },
-      data: {
-        EskisehirDöviz: updatedEskisehirData || {},
-        Tcmb: updatedTcmbData || {}
-      }
+      EskisehirDöviz: updatedEskisehirData || {},
+      Tcmb: updatedTcmbData || {}
     };
 
     return res.json(response);
@@ -639,10 +635,8 @@ app.get("/api/kurlar", async (req, res) => {
         cache_ttl: 30,
         sources: ["EskisehirDöviz", "Tcmb"]
       },
-      data: {
-        EskisehirDöviz: kurlar || {},
-        Tcmb: tcmb || {}
-      },
+      EskisehirDöviz: kurlar || {},
+      Tcmb: tcmb || {},
       error: "Beklenmeyen hata oluştu"
     };
     
