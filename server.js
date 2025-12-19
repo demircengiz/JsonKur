@@ -361,15 +361,18 @@ function writeKurlarToFile(eskisehirData, koprubasiData = null, haremAltinData =
 // Köprübaşı API'den veri çek (tetikleyici sayfayı önce çağır, timeout ve retry ile)
 async function fetchKoprubasiData(retries = 2) {
   for (let attempt = 1; attempt <= retries; attempt++) {
+    let timeoutId;
     try {
       // Önce tetikleyici sayfayı çağrı (dosya üretimini tetikle)
+      let triggerTimeoutId;
       try {
         const triggerController = new AbortController();
-        const triggerTimeoutId = setTimeout(() => triggerController.abort(), 5000);
+        triggerTimeoutId = setTimeout(() => triggerController.abort(), 5000);
         await fetch("http://88.247.58.95:85/Kur/", { signal: triggerController.signal });
         clearTimeout(triggerTimeoutId);
         console.log("Köprübaşı tetikleyici sayfası çağrıldı");
       } catch (triggerError) {
+        if (triggerTimeoutId) clearTimeout(triggerTimeoutId);
         console.warn(`Köprübaşı tetikleyici hatası (devam ediliyor): ${triggerError.message}`);
       }
       
@@ -378,7 +381,7 @@ async function fetchKoprubasiData(retries = 2) {
       
       // Şimdi coprubasi.json dosyasını çek
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 saniye timeout
+      timeoutId = setTimeout(() => controller.abort(), 10000); // 10 saniye timeout
       
       const response = await fetch("http://88.247.58.95:85/Kur/koprubasi.json", {
         signal: controller.signal,
@@ -396,6 +399,7 @@ async function fetchKoprubasiData(retries = 2) {
       console.log("Köprübaşı API bağlantısı başarılı");
       return { data: data || [], error: null };
     } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId);
       console.warn(`Köprübaşı API deneme ${attempt}/${retries} başarısız: ${err.message}`);
       
       if (attempt < retries) {
@@ -435,9 +439,10 @@ function convertKoprubasiDataToKurFormat(koprubasiData) {
 // Harici API'den altın/döviz verilerini çek (timeout ve retry ile)
 async function fetchHaremAltinData(retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
+    let timeoutId;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 saniye timeout
+      timeoutId = setTimeout(() => controller.abort(), 10000); // 10 saniye timeout
       
       const response = await fetch("https://canlipiyasalar.haremaltin.com/tmp/altin.json?dil_kodu=tr", {
         signal: controller.signal,
@@ -455,7 +460,7 @@ async function fetchHaremAltinData(retries = 3) {
       console.log("HaremAltin API bağlantısı başarılı");
       return { data: data.data || {}, error: null };
     } catch (err) {
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
       console.warn(`HaremAltin API deneme ${attempt}/${retries} başarısız: ${err.message}`);
       
       // Son deneme değilse bekle ve tekrar dene
@@ -495,9 +500,10 @@ function convertHaremAltinDataToKurFormat(haremAltinData) {
 // TCMB API'den veri çek (timeout ve retry ile)
 async function fetchTcmbData(retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
+    let timeoutId;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 saniye timeout
+      timeoutId = setTimeout(() => controller.abort(), 10000); // 10 saniye timeout
       
       const response = await fetch("https://www.tcmb.gov.tr/kurlar/today.xml", {
         signal: controller.signal,
@@ -536,6 +542,7 @@ async function fetchTcmbData(retries = 3) {
       console.log("TCMB XML bağlantısı başarılı");
       return { data: jsonData, error: null };
     } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId);
       console.warn(`TCMB API deneme ${attempt}/${retries} başarısız: ${err.message}`);
       
       if (attempt < retries) {
