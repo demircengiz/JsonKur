@@ -417,6 +417,7 @@ function convertKoprubasiDataToKurFormat(koprubasiData) {
 // Hareci API'den altın/döviz verilerini çek
 async function fetchHaremAltinData(retryCount = 0) {
   const endpoint = "https://canlipiyasalar.haremaltin.com/tmp/altin.json?dil_kodu=tr";
+  const maxRetries = 3;
   
   try {
     const controller = new AbortController();
@@ -428,7 +429,9 @@ async function fetchHaremAltinData(retryCount = 0) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://canlipiyasalar.haremaltin.com/',
         'Accept': 'application/json',
-        'Accept-Language': 'tr-TR,tr;q=0.9'
+        'Accept-Language': 'tr-TR,tr;q=0.9',
+        'Connection': 'keep-alive',
+        'Cache-Control': 'no-cache'
       }
     });
     clearTimeout(timeout);
@@ -440,7 +443,16 @@ async function fetchHaremAltinData(retryCount = 0) {
     console.log("HaremAltin API bağlantısı başarılı");
     return { data: data.data || {}, error: null };
   } catch (err) {
-    console.warn(`HaremAltin API başarısız (hızlı geçiliyor): ${err.message}`);
+    // Retry eğer fetch failed ise
+    if (retryCount < maxRetries && err.message.includes("fetch")) {
+      const delay = Math.pow(2, retryCount) * 1000; // exponential backoff
+      console.warn(`HaremAltin retry ${retryCount + 1}/${maxRetries} after ${delay}ms: ${err.message}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchHaremAltinData(retryCount + 1);
+    }
+    
+    const errorMsg = `HaremAltin API başarısız (${retryCount > 0 ? `${retryCount} retry sonrası` : "hızlı geçiliyor"}): ${err.message}`;
+    console.warn(errorMsg);
     return { data: {}, error: null };
   }
 }
