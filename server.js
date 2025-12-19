@@ -28,12 +28,33 @@ async function updateDataInBackground() {
     let haremAltinData = readHaremAltinFromFile();
     let tcmbData = readTcmbFromFile();
     
+    // SQL Server - EskisehirDöviz
+    try {
+      const pool = await getPool();
+      const result = await pool.request().query(`
+        SELECT TOP (50)
+          Kodu, 
+          CAST(Adi AS NVARCHAR(MAX)) COLLATE Turkish_CI_AS AS Adi, 
+          Alis, 
+          Satis
+        FROM dbo.OnlineFiyatlar
+        ORDER BY Kodu DESC
+      `);
+      if (result && result.recordset && result.recordset.length > 0) {
+        eskisehirData = updateKurlarWithChanges(result.recordset, eskisehirData, true);
+        console.log("Background SQL Server veri çekildi");
+      }
+    } catch (e) {
+      console.warn("Background SQL Server hatası:", e.message);
+    }
+    
     // Köprübaşı
     try {
       const { data } = await fetchKoprubasiData();
       const converted = convertKoprubasiDataToKurFormat(data);
       if (converted && converted.length > 0) {
         koprubasiData = updateKurlarWithChanges(converted, koprubasiData);
+        console.log("Background Köprübaşı veri çekildi");
       }
     } catch (e) {
       console.warn("Background Köprübaşı hatası:", e.message);
@@ -45,6 +66,7 @@ async function updateDataInBackground() {
       const converted = convertHaremAltinDataToKurFormat(data);
       if (converted && converted.length > 0) {
         haremAltinData = updateKurlarWithChanges(converted, haremAltinData);
+        console.log("Background HaremAltin veri çekildi");
       }
     } catch (e) {
       console.warn("Background HaremAltin hatası:", e.message);
@@ -57,6 +79,7 @@ async function updateDataInBackground() {
         const converted = convertTcmbDataToKurFormat(data);
         if (converted && converted.length > 0) {
           tcmbData = updateKurlarWithChanges(converted, tcmbData);
+          console.log("Background TCMB veri çekildi");
         }
       }
     } catch (e) {
@@ -76,6 +99,9 @@ async function updateDataInBackground() {
 
 // Periyodik update başlat (30 dakika arayla)
 setInterval(updateDataInBackground, UPDATE_INTERVAL);
+
+// Startup'ta ilk update'i hemen çalıştır (async)
+updateDataInBackground().catch(err => console.error("Initial update hatası:", err));
 
 // CORS ve JSON middleware
 app.use((req, res, next) => {
