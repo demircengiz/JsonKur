@@ -410,16 +410,25 @@ function convertKoprubasiDataToKurFormat(koprubasiData) {
 // Harici API'den altın/döviz verilerini çek (retry ile)
 async function fetchHaremAltinData() {
   const maxRetries = 3;
-  const timeout = 10000; // 10 saniye
+  const timeout = 30000; // 30 saniye
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let controller = null;
+    let timeoutId = null;
+    
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      controller = new AbortController();
+      timeoutId = setTimeout(() => {
+        console.warn(`HaremAltin timeout: ${timeout}ms sonra abort tetiklendi (deneme ${attempt})`);
+        controller.abort();
+      }, timeout);
 
       const response = await fetch("https://canlipiyasalar.haremaltin.com/tmp/altin.json?dil_kodu=tr", {
-        signal: controller.signal
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
       });
 
       clearTimeout(timeoutId);
@@ -431,12 +440,23 @@ async function fetchHaremAltinData() {
       console.log("HaremAltin API bağlantısı başarılı");
       return { data: data.data || {}, error: null };
     } catch (err) {
-      lastError = err.message;
-      console.error(`HaremAltin API denemesi ${attempt}/${maxRetries} başarısız: ${err.message}`);
+      if (timeoutId) clearTimeout(timeoutId);
+      
+      let errorType = err.name || "Bilinmeyen";
+      let errorMsg = err.message || String(err);
+      
+      // AbortError vs diğer hatalar
+      if (err.name === "AbortError") {
+        errorMsg = `Timeout/AbortError (${timeout}ms)`;
+      }
+      
+      lastError = errorMsg;
+      console.error(`HaremAltin API denemesi ${attempt}/${maxRetries} başarısız [${errorType}]: ${errorMsg}`);
       
       if (attempt < maxRetries) {
         // Sonraki deneme öncesi bekleme süresi (exponential backoff)
         const waitTime = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s...
+        console.log(`${waitTime}ms sonra deneme ${attempt + 1} başlayacak...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
     }
