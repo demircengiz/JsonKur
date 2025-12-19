@@ -372,7 +372,7 @@ async function fetchKoprubasiData() {
     // Dosya oluşturulması için kısa bir bekleme
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Şimdi koprubasi.json dosyasını çek
+    // Şimdi coprubasi.json dosyasını çek
     const response = await fetch("http://88.247.58.95:85/Kur/koprubasi.json");
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -407,21 +407,44 @@ function convertKoprubasiDataToKurFormat(koprubasiData) {
   return converted;
 }
 
-// Harici API'den altın/döviz verilerini çek
+// Harici API'den altın/döviz verilerini çek (retry ile)
 async function fetchHaremAltinData() {
-  try {
-    const response = await fetch("https://canlipiyasalar.haremaltin.com/tmp/altin.json?dil_kodu=tr");
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+  const maxRetries = 3;
+  const timeout = 10000; // 10 saniye
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const response = await fetch("https://canlipiyasalar.haremaltin.com/tmp/altin.json?dil_kodu=tr", {
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log("HaremAltin API bağlantısı başarılı");
+      return { data: data.data || {}, error: null };
+    } catch (err) {
+      lastError = err.message;
+      console.error(`HaremAltin API denemesi ${attempt}/${maxRetries} başarısız: ${err.message}`);
+      
+      if (attempt < maxRetries) {
+        // Sonraki deneme öncesi bekleme süresi (exponential backoff)
+        const waitTime = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s...
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
-    const data = await response.json();
-    console.log("HaremAltin API bağlantısı başarılı");
-    return { data: data.data || {}, error: null };
-  } catch (err) {
-    const errorMsg = `HaremAltin API bağlantısı başarısız: ${err.message}`;
-    console.error(errorMsg);
-    return { data: {}, error: errorMsg };
   }
+
+  const errorMsg = `HaremAltin API bağlantısı başarısız (${maxRetries} deneme sonrası): ${lastError}`;
+  console.error(errorMsg);
+  return { data: {}, error: errorMsg };
 }
 
 // Harici API verilerini mevcut formata dönüştür
@@ -665,6 +688,39 @@ function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false
 
 // Basit health endpoint
 app.get("/health", (req, res) => res.json({ ok: true }));
+
+// Dış API bağlantı test endpoint'i
+app.get("/api-test", async (req, res) => {
+  const tests = {
+    haremaltin: null,
+    google: null,
+    timestamp: new Date().toISOString()
+  };
+
+  try {
+    // HaremAltin test
+    const controller1 = new AbortController();
+    const timeout1 = setTimeout(() => controller1.abort(), 5000);
+    const haremAltinResp = await fetch("https://canlipiyasalar.haremaltin.com/tmp/altin.json?dil_kodu=tr", { signal: controller1.signal });
+    clearTimeout(timeout1);
+    tests.haremaltin = { status: haremAltinResp.status, ok: haremAltinResp.ok };
+  } catch (err) {
+    tests.haremaltin = { error: err.message };
+  }
+
+  try {
+    // Google DNS test (Her zaman çalışmalı)
+    const controller2 = new AbortController();
+    const timeout2 = setTimeout(() => controller2.abort(), 5000);
+    const googleResp = await fetch("https://www.google.com", { signal: controller2.signal });
+    clearTimeout(timeout2);
+    tests.google = { status: googleResp.status, ok: googleResp.ok };
+  } catch (err) {
+    tests.google = { error: err.message };
+  }
+
+  res.json(tests);
+});
 
 /**
  * JSON endpoint örneği:
