@@ -422,7 +422,15 @@ async function fetchHaremAltinData(retryCount = 0) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000); // 5 saniye timeout
     
-    const response = await fetch(endpoint, { signal: controller.signal });
+    const response = await fetch(endpoint, { 
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://canlipiyasalar.haremaltin.com/',
+        'Accept': 'application/json',
+        'Accept-Language': 'tr-TR,tr;q=0.9'
+      }
+    });
     clearTimeout(timeout);
     
     if (!response.ok) {
