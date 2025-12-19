@@ -414,64 +414,38 @@ function convertKoprubasiDataToKurFormat(koprubasiData) {
   return converted;
 }
 
-// Harici API'den altın/döviz verilerini çek
+// Hareci API'den altın/döviz verilerini çek
 async function fetchHaremAltinData(retryCount = 0) {
-  const maxRetries = 3;
-  const endpoints = [
-    "https://canlipiyasalar.haremaltin.com/tmp/altin.json?dil_kodu=tr"
-  ];
-  
-  const fetchOptions = {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      "Accept": "application/json"
-    }
-  };
+  const maxRetries = 2;
+  const endpoint = "https://canlipiyasalar.haremaltin.com/tmp/altin.json?dil_kodu=tr";
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    for (const endpoint of endpoints) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000); // 8 saniye timeout
-        
-        const response = await fetch(endpoint, { 
-          signal: controller.signal,
-          ...fetchOptions
-        });
-        clearTimeout(timeout);
-        
-        if (!response.ok) {
-          // 503 hatası için devam et, diğer hatalar için exception fırlat
-          if (response.status === 503 || response.status === 502 || response.status === 504) {
-            console.warn(`HaremAltin ${response.status} hatası (${endpoint}) - retry yapılacak`);
-            continue;
-          }
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log("HaremAltin API bağlantısı başarılı");
-        return { data: data.data || data || {}, error: null };
-      } catch (err) {
-        console.warn(`HaremAltin endpoint hatası (${endpoint}): ${err.message}`);
-        // Son endpoint ve son deneme değilse devam et
-        if (attempt < maxRetries || endpoint !== endpoints[endpoints.length - 1]) {
-          continue;
-        }
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000); // 10 saniye timeout
+      
+      const response = await fetch(endpoint, { signal: controller.signal });
+      clearTimeout(timeout);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    }
-    
-    // Retry öncesi bekleme (son deneme değilse)
-    if (attempt < maxRetries) {
-      const delay = 1500 * (attempt + 1); // Exponential backoff
-      console.log(`HaremAltin retry ${attempt + 1}/${maxRetries} - ${delay}ms sonra tekrar denecek`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      const data = await response.json();
+      console.log("HaremAltin API bağlantısı başarılı");
+      return { data: data.data || {}, error: null };
+    } catch (err) {
+      console.warn(`HaremAltin API deneme ${attempt + 1}/${maxRetries + 1} başarısız: ${err.message}`);
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } else {
+        const errorMsg = `HaremAltin API bağlantısı başarısız: ${err.message}`;
+        console.error(errorMsg);
+        return { data: {}, error: errorMsg };
+      }
     }
   }
   
-  const errorMsg = `HaremAltin API tüm deneme sonrası başarısız`;
-  console.error(errorMsg);
-  return { data: {}, error: errorMsg };
+  return { data: {}, error: "HaremAltin API tüm deneme sonrası başarısız" };
 }
 
 // Harici API verilerini mevcut formata dönüştür
