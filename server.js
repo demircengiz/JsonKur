@@ -10,6 +10,73 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Background API update sistemi
+let isUpdating = false;
+let lastUpdateTime = 0;
+const UPDATE_INTERVAL = 30 * 60 * 1000; // 30 dakika
+
+async function updateDataInBackground() {
+  if (isUpdating) return;
+  isUpdating = true;
+  
+  try {
+    console.log("Background API update başladı...");
+    
+    // Mevcut verileri oku
+    let eskisehirData = readKurlarFromFile();
+    let koprubasiData = readKoprubasiFromFile();
+    let haremAltinData = readHaremAltinFromFile();
+    let tcmbData = readTcmbFromFile();
+    
+    // Köprübaşı
+    try {
+      const { data } = await fetchKoprubasiData();
+      const converted = convertKoprubasiDataToKurFormat(data);
+      if (converted && converted.length > 0) {
+        koprubasiData = updateKurlarWithChanges(converted, koprubasiData);
+      }
+    } catch (e) {
+      console.warn("Background Köprübaşı hatası:", e.message);
+    }
+    
+    // HaremAltin
+    try {
+      const { data } = await fetchHaremAltinData();
+      const converted = convertHaremAltinDataToKurFormat(data);
+      if (converted && converted.length > 0) {
+        haremAltinData = updateKurlarWithChanges(converted, haremAltinData);
+      }
+    } catch (e) {
+      console.warn("Background HaremAltin hatası:", e.message);
+    }
+    
+    // TCMB
+    try {
+      const { data } = await fetchTcmbData();
+      if (data && Object.keys(data).length > 0) {
+        const converted = convertTcmbDataToKurFormat(data);
+        if (converted && converted.length > 0) {
+          tcmbData = updateKurlarWithChanges(converted, tcmbData);
+        }
+      }
+    } catch (e) {
+      console.warn("Background TCMB hatası:", e.message);
+    }
+    
+    // Dosyaya kaydet
+    writeKurlarToFile(eskisehirData, koprubasiData, haremAltinData, tcmbData);
+    lastUpdateTime = Date.now();
+    console.log("Background API update tamamlandı");
+  } catch (err) {
+    console.error("Background update hatası:", err.message);
+  } finally {
+    isUpdating = false;
+  }
+}
+
+// Periyodik update başlat (30 dakika arayla)
+setInterval(updateDataInBackground, UPDATE_INTERVAL);
+
 // CORS ve JSON middleware
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
@@ -705,160 +772,54 @@ function updateKurlarWithChanges(newData, existingData, isEskisehirDoviz = false
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 /**
- * JSON endpoint örneği:
- * SQL Server 2016+ ise FOR JSON PATH ile tek parça JSON döndürüyoruz.
- * SQL bağlantısı başarısız olursa JSON dosyasından veri okur.
+ * JSON endpoint - Cached data'yı döndürür
+ * Background task async olarak API'yi günceller
  */
 app.get("/api/kurlar", async (req, res) => {
   try {
-    // Mevcut JSON dosyasını oku
-    let existingEskisehirData = readKurlarFromFile();
-    let existingKoprubasiData = readKoprubasiFromFile();
-    let existingHaremAltinData = readHaremAltinFromFile();
-    let existingTcmbData = readTcmbFromFile();
-    let updatedEskisehirData = existingEskisehirData;
-    let updatedKoprubasiData = existingKoprubasiData;
-    let updatedHaremAltinData = existingHaremAltinData;
-    let updatedTcmbData = existingTcmbData;
-
-    // SQL Server'dan veri almaya çalış
-    try {
-      const pool = await getPool();
-      const result = await pool.request().query(`
-        SELECT TOP (50)
-          Kodu, 
-          CAST(Adi AS NVARCHAR(MAX)) COLLATE Turkish_CI_AS AS Adi, 
-          Alis, 
-          Satis
-        FROM dbo.OnlineFiyatlar
-        ORDER BY Kodu DESC
-      `);
-
-      // Yeni verilerle karşılaştırıp güncelle (EskisehirDöviz için boş değerleri sıfır yap)
-      updatedEskisehirData = updateKurlarWithChanges(result.recordset, existingEskisehirData, true);
-    } catch (dbError) {
-      console.error(`SQL Server bağlantı hatası: ${dbError.message}`);
-      // SQL bağlantısı başarısız, mevcut veriyi koru veya boş obje oluştur
-      updatedEskisehirData = existingEskisehirData && Object.keys(existingEskisehirData).length > 0 ? existingEskisehirData : {};
-    }
-
-    // Köprübaşı API'den veri çek
-    try {
-      const { data: koprubasiData, error: koprubasiError } = await fetchKoprubasiData();
-      if (koprubasiError) {
-        console.warn(`Köprübaşı hatası: ${koprubasiError}`);
-      }
-      const convertedKoprubasiData = convertKoprubasiDataToKurFormat(koprubasiData);
-      
-      // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
-      if (convertedKoprubasiData && convertedKoprubasiData.length > 0) {
-        updatedKoprubasiData = updateKurlarWithChanges(convertedKoprubasiData, existingKoprubasiData);
-      } else {
-        // API'den veri gelmedi, mevcut veriyi koru veya boş obje oluştur
-        updatedKoprubasiData = existingKoprubasiData && Object.keys(existingKoprubasiData).length > 0 ? existingKoprubasiData : {};
-      }
-    } catch (koprubasiError) {
-      console.error(`Köprübaşı işleme hatası: ${koprubasiError.message}`);
-      // Hata durumunda mevcut veriyi koru veya boş obje oluştur
-      updatedKoprubasiData = existingKoprubasiData && Object.keys(existingKoprubasiData).length > 0 ? existingKoprubasiData : {};
-    }
-
-    // HaremAltin API'den veri çek
-    try {
-      const { data: haremAltinData, error: haremAltinError } = await fetchHaremAltinData();
-      if (haremAltinError) {
-        console.warn(`HaremAltin hatası: ${haremAltinError}`);
-      }
-      const convertedHaremAltinData = convertHaremAltinDataToKurFormat(haremAltinData);
-      
-      // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
-      if (convertedHaremAltinData && convertedHaremAltinData.length > 0) {
-        updatedHaremAltinData = updateKurlarWithChanges(convertedHaremAltinData, existingHaremAltinData);
-      } else {
-        // API'den veri gelmedi, mevcut veriyi koru veya boş obje oluştur
-        updatedHaremAltinData = existingHaremAltinData && Object.keys(existingHaremAltinData).length > 0 ? existingHaremAltinData : {};
-      }
-    } catch (haremAltinError) {
-      console.error(`HaremAltin işleme hatası: ${haremAltinError.message}`);
-      // Hata durumunda mevcut veriyi koru veya boş obje oluştur
-      updatedHaremAltinData = existingHaremAltinData && Object.keys(existingHaremAltinData).length > 0 ? existingHaremAltinData : {};
-    }
-
-    // TCMB API'den veri çek
-    try {
-      const { data: tcmbData, error: tcmbError } = await fetchTcmbData();
-      if (tcmbError) {
-        console.warn(`TCMB hatası: ${tcmbError}`);
-      }
-      
-      if (!tcmbData || Object.keys(tcmbData).length === 0) {
-        updatedTcmbData = existingTcmbData && Object.keys(existingTcmbData).length > 0 ? existingTcmbData : {};
-      } else {
-        const convertedTcmbData = convertTcmbDataToKurFormat(tcmbData);
-        
-        // Veri varsa ve boş değilse güncelle, yoksa mevcut veriyi koru
-        if (convertedTcmbData && convertedTcmbData.length > 0) {
-          updatedTcmbData = updateKurlarWithChanges(convertedTcmbData, existingTcmbData);
-        } else {
-          // API'den veri gelmedi, mevcut veriyi koru veya boş obje oluştur
-          updatedTcmbData = existingTcmbData && Object.keys(existingTcmbData).length > 0 ? existingTcmbData : {};
-        }
-      }
-    } catch (tcmbError) {
-      console.error(`TCMB işleme hatası: ${tcmbError.message}`);
-      // Hata durumunda mevcut veriyi koru veya boş obje oluştur
-      updatedTcmbData = existingTcmbData && Object.keys(existingTcmbData).length > 0 ? existingTcmbData : {};
-    }
-
-    // Güncellenmiş verileri JSON dosyasına kaydet
-    writeKurlarToFile(updatedEskisehirData, updatedKoprubasiData, updatedHaremAltinData, updatedTcmbData);
-
-    // Meta bilgilerini oluştur
-    const generatedAt = getCurrentDateTimeISO();
-    
-    // Response oluştur (meta ve data wrapper ile)
-    const response = {
-      meta: {
-        generated_at: generatedAt,
-        cache_ttl: 30,
-        sources: ["EskisehirDöviz", "KoprubasiDoviz", "HaremAltinDoviz", "Tcmb"]
-      },
-      data: {
-        EskisehirDöviz: updatedEskisehirData || {},
-        KoprubasiDoviz: updatedKoprubasiData || {},
-        HaremAltinDoviz: updatedHaremAltinData || {},
-        Tcmb: updatedTcmbData || {}
-      }
-    };
-
-    return res.json(response);
-  } catch (err) {
-    // Son çare olarak JSON dosyasından oku
+    // Cached data'yı oku
     const kurlar = readKurlarFromFile();
     const koprubasi = readKoprubasiFromFile();
     const haremAltin = readHaremAltinFromFile();
     const tcmb = readTcmbFromFile();
     
+    // Background update'i tetikle (async, response'ü bloke etmez)
+    if (Date.now() - lastUpdateTime > UPDATE_INTERVAL) {
+      updateDataInBackground().catch(err => console.error("Bg update error:", err));
+    }
+    
     // Meta bilgilerini oluştur
     const generatedAt = getCurrentDateTimeISO();
     
-    // API bağlantısı yoksa bile boş obje oluştur
+    // Response oluştur
     const response = {
       meta: {
         generated_at: generatedAt,
         cache_ttl: 30,
-        sources: ["EskisehirDöviz", "KoprubasiDoviz", "HaremAltinDoviz", "Tcmb"]
+        sources: ["EskisehirDöviz", "KoprubasiDoviz", "HaremAltinDoviz", "Tcmb"],
+        last_updated: lastUpdateTime ? new Date(lastUpdateTime).toISOString() : "never"
       },
       data: {
         EskisehirDöviz: kurlar || {},
         KoprubasiDoviz: koprubasi || {},
         HaremAltinDoviz: haremAltin || {},
         Tcmb: tcmb || {}
-      },
-      error: "Beklenmeyen hata oluştu"
+      }
     };
     
-    res.json(response);
+    return res.json(response);
+  } catch (err) {
+    console.error("Kurlar endpoint hatası:", err.message);
+    
+    // Son çare fallback
+    const generatedAt = getCurrentDateTimeISO();
+    res.status(500).json({
+      meta: {
+        generated_at: generatedAt,
+        error: "Veri okunamadı"
+      },
+      data: {}
+    });
   }
 });
 app.listen(PORT, () => {
