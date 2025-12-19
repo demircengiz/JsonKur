@@ -420,7 +420,7 @@ async function fetchHaremAltinData(retryCount = 0) {
   
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000); // 5 saniye timeout
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15 saniye timeout
     
     const response = await fetch(endpoint, { 
       signal: controller.signal,
