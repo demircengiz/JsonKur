@@ -3,19 +3,42 @@ dns.setDefaultResultOrder("ipv4first");
 
 import { Agent, setGlobalDispatcher } from "undici";
 setGlobalDispatcher(new Agent({
-  connectTimeout: 20000, // 20s
+  connectTimeout: 20000,
   headersTimeout: 20000,
   bodyTimeout: 20000,
 }));
 
-const url = "https://canlipiyasalar.haremaltin.com/tmp/altin.json?dil_kodu=tr";
+import express from "express";
+const app = express();
 
-const r = await fetch(url, {
-  headers: {
-    "User-Agent": "Mozilla/5.0",
-    "Accept": "application/json,text/plain,*/*",
-    "Referer": "https://canlipiyasalar.haremaltin.com/",
-  },
+app.get("/altin", async (req, res) => {
+  try {
+    const r = await fetch(
+      "https://canlipiyasalar.haremaltin.com/tmp/altin.json?dil_kodu=tr",
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          "Accept": "application/json,text/plain,*/*",
+          "Referer": "https://canlipiyasalar.haremaltin.com/",
+        },
+      }
+    );
+
+    const text = await r.text();
+
+    if (!r.ok) {
+      return res.status(502).json({
+        ok: false,
+        status: r.status,
+        body: text.slice(0, 200),
+      });
+    }
+
+    res.json(JSON.parse(text));
+  } catch (err) {
+    console.error("FETCH_ERR:", err);
+    res.status(500).json({ ok: false, error: String(err) });
+  }
 });
-console.log(r.status);
-console.log((await r.text()).slice(0, 200));
+
+app.listen(process.env.PORT || 3000);
